@@ -18,7 +18,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #4 Provider registry & LLM client — blocked by: #3
 - [x] #5 Structured output + JSON-repair — blocked by: #4
-- [ ] #6 Per-agent model routing — blocked by: #4, #3
+- [x] #6 Per-agent model routing — blocked by: #4, #3
 
 ### M2 — Perception
 

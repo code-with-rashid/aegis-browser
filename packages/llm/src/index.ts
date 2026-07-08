@@ -26,3 +26,20 @@ export { parseAndRepairJson } from './json-repair';
 
 export type { GenerateStructuredOptions } from './generate-structured';
 export { generateStructured } from './generate-structured';
+
+export type {
+  AgentRole,
+  RoleModelConfig,
+  ModelRoutingConfig,
+  ModelRouter,
+  ProviderFactory,
+} from './model-routing';
+export {
+  AgentRoleSchema,
+  RoleModelConfigSchema,
+  ModelRoutingConfigSchema,
+  DEFAULT_ROLE_TEMPERATURE,
+  createModelRouter,
+  saveModelRoutingConfig,
+  loadModelRoutingConfig,
+} from './model-routing';

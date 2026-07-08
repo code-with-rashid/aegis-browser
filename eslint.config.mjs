@@ -42,7 +42,10 @@ export default tseslint.config(
     rules: {
       'import/no-cycle': 'error',
       'import/no-self-import': 'error',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/switch-exhaustiveness-check': 'error',
