@@ -110,4 +110,70 @@ describe('getPerceptionPayload', () => {
     expect(isOk(result) && result.value.truncated).toBe(true);
     expect(isOk(result) && result.value.tokenEstimate).toBeLessThanOrEqual(20);
   });
+
+  it('does not capture a screenshot unless useVision is set', async () => {
+    const calls: string[] = [];
+    const cdp = createFakeCdp(1, {
+      onSend: (method) => {
+        calls.push(method);
+        if (method === 'Accessibility.getFullAXTree') {
+          return ok({ nodes: [] });
+        }
+        if (method === 'DOM.getDocument') {
+          return ok({ root: domRoot() });
+        }
+        return ok(undefined);
+      },
+    });
+    await cdp.attach();
+
+    const result = await getPerceptionPayload(cdp, { goal: 'anything' });
+
+    expect(isOk(result) && result.value.vision).toBeUndefined();
+    expect(calls).not.toContain('Page.captureScreenshot');
+  });
+
+  it('captures vision and attaches it to the payload when useVision is true', async () => {
+    const cdp = createFakeCdp(1, {
+      onSend: (method) => {
+        if (method === 'Accessibility.getFullAXTree') {
+          return ok({ nodes: [] });
+        }
+        if (method === 'DOM.getDocument') {
+          return ok({ root: domRoot() });
+        }
+        if (method === 'Page.captureScreenshot') {
+          return ok({ data: 'imgdata' });
+        }
+        return ok({ model: { border: [0, 0, 10, 0, 10, 10, 0, 10] } });
+      },
+    });
+    await cdp.attach();
+
+    const result = await getPerceptionPayload(cdp, { goal: 'submit order', useVision: true });
+
+    expect(isOk(result) && result.value.vision?.screenshot).toEqual({
+      data: 'imgdata',
+      format: 'png',
+    });
+  });
+
+  it('propagates a vision capture failure when useVision is true', async () => {
+    const cdp = createFakeCdp(1, {
+      onSend: (method) => {
+        if (method === 'Accessibility.getFullAXTree') {
+          return ok({ nodes: [] });
+        }
+        if (method === 'DOM.getDocument') {
+          return ok({ root: domRoot() });
+        }
+        return err(new CdpError('CDP_SEND_FAILED', 'no screenshot'));
+      },
+    });
+    await cdp.attach();
+
+    const result = await getPerceptionPayload(cdp, { goal: 'anything', useVision: true });
+
+    expect(isErr(result) && result.error.code).toBe('CDP_SEND_FAILED');
+  });
 });

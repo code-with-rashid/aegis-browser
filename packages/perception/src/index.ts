@@ -32,3 +32,13 @@ export type {
 export { compressForHistory } from './aggregator/history-compression';
 export type { GetPerceptionPayloadOptions } from './aggregator/perception-source';
 export { getPerceptionPayload } from './aggregator/perception-source';
+
+export type {
+  ScreenshotFormat,
+  CapturedScreenshot,
+  CaptureScreenshotOptions,
+} from './vision/screenshot';
+export { captureScreenshot } from './vision/screenshot';
+export { quadToBounds, getElementBounds } from './vision/element-bounds';
+export type { VisionPerception, GetVisionPerceptionOptions } from './vision/vision-perception';
+export { getVisionPerception } from './vision/vision-perception';

@@ -82,4 +82,18 @@ contentSummary, tokenEstimate}` for the agent loop to keep as history across man
   without blowing the prompt budget (see ADR 0003 for why this is scoped as "compress one
   payload," not "manage the history list").
 
+## Vision fallback (scaffold)
+
+For canvas/icon-only UIs where AX/DOM structure is missing or unhelpful,
+`getVisionPerception(session, elements)` (`vision/vision-perception.ts`) captures a
+screenshot (`captureScreenshot`, `vision/screenshot.ts` — `Page.captureScreenshot`) and,
+for each given element, its bounding box (`getElementBounds`, `vision/element-bounds.ts`
+— `DOM.getBoxModel`, converted from CDP's 4-corner `Quad` to an axis-aligned box). An
+element whose ref doesn't encode a backend node id, or whose box model fetch fails, is
+simply omitted — one bad element never fails the whole capture.
+
+This is genuinely a fallback, **not on by default**: `getPerceptionPayload` never calls
+it unless the caller passes `useVision: true`, in which case the result is attached as
+`payload.vision`. It can also be called directly for finer-grained on-demand use.
+
 Depends on `@aegis/llm`, `@aegis/shared`.
