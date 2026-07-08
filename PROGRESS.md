@@ -26,7 +26,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #8 Accessibility-tree extractor & normalizer — blocked by: #7
 - [x] #9 DOM pruner & content extractor — blocked by: #7
 - [x] #10 Perception aggregator & budgeter — blocked by: #8, #9
-- [ ] #11 Vision fallback (scaffold) — blocked by: #10
+- [x] #11 Vision fallback (scaffold) — blocked by: #10
 
 ### M3 — Actions
 

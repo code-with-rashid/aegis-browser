@@ -1,15 +1,21 @@
 import type { PerceivedElement } from '../ax/perceived-element';
 import type { ExtractedContent } from '../dom/readable-content';
+import type { VisionPerception } from '../vision/vision-perception';
 import { mergeElements } from './merge-elements';
 import { rankByRelevance } from './relevance';
 import { CHARS_PER_TOKEN, estimateElementTokens, estimateTokens } from './token-estimate';
 
-/** One compact, token-budgeted view of the page, ready to hand to the Navigator/Planner. */
+/**
+ * One compact, token-budgeted view of the page, ready to hand to the Navigator/Planner.
+ * `vision` is only present when the caller opted in via `useVision` — see
+ * `vision/vision-perception.ts`; it is never populated by default.
+ */
 export interface PerceptionPayload {
   readonly elements: readonly PerceivedElement[];
   readonly content: ExtractedContent;
   readonly tokenEstimate: number;
   readonly truncated: boolean;
+  readonly vision?: VisionPerception;
 }
 
 export interface AggregatePerceptionInput {
