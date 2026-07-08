@@ -12,7 +12,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #1 Scaffold WXT + TypeScript monorepo — blocked by: none
 - [x] #2 Tooling & quality gates — blocked by: #1
-- [ ] #3 Shared kernel — blocked by: #1
+- [x] #3 Shared kernel — blocked by: #1
 
 ### M1 — LLM layer (BYOK)
 

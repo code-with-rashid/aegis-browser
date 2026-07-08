@@ -53,6 +53,23 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
+    // Domain packages (agent/security/actions/perception/llm/shared) must stay
+    // browser-agnostic: chrome.* may only appear in a designated adapter module,
+    // conventionally named so this glob catches it (e.g. `chrome-storage-adapter.ts`).
+    files: ['packages/**/*.{ts,tsx}'],
+    ignores: ['packages/**/*chrome*.{ts,tsx}'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'chrome',
+          message:
+            'chrome.* is only allowed in a dedicated *-adapter module (file name containing "chrome").',
+        },
+      ],
+    },
+  },
+  {
     files: ['apps/extension/**/*.{ts,tsx}'],
     plugins: {
       react: reactPlugin,
@@ -66,12 +83,17 @@ export default tseslint.config(
       ...reactPlugin.configs.flat['jsx-runtime'].rules,
       ...reactHooksPlugin.configs.recommended.rules,
       '@typescript-eslint/no-non-null-assertion': 'off',
-      // @types/chrome tags the whole `chrome` global as deprecated (it points at the
-      // retired Chrome Apps platform docs), but it's the correct MV3 extension API.
-      '@typescript-eslint/no-deprecated': 'off',
     },
     settings: {
       react: { version: 'detect' },
+    },
+  },
+  {
+    // @types/chrome tags the whole `chrome` global as deprecated (it points at the
+    // retired Chrome Apps platform docs), but it's the correct MV3 extension API.
+    files: ['apps/extension/**/*.{ts,tsx}', '**/*chrome*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-deprecated': 'off',
     },
   },
   {
