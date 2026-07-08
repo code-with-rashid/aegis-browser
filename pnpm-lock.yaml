@@ -209,9 +209,15 @@ importers:
         specifier: workspace:*
         version: link:../shared
     devDependencies:
+      '@types/chrome':
+        specifier: ^0.0.280
+        version: 0.0.280
       '@vitest/coverage-v8':
         specifier: ^4.1.10
         version: 4.1.10(vitest@4.1.10)
+      devtools-protocol:
+        specifier: ^0.0.1658499
+        version: 0.0.1658499
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
@@ -1731,6 +1737,9 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  devtools-protocol@0.0.1658499:
+    resolution: {integrity: sha512-ErMPzWOOgJU/Ftl1Qj2iGGsVqHceICIgeLeFuuVah4vQjC3hE1XwGlXA34syuduBCK1y3dn3VCI8a/MlfSnL/A==}
 
   didyoumean@1.2.2:
     resolution: {integrity: sha512-gxtyfqMg7GKyhQmb056K7M3xszy/myH8w+B4RT+QXBQsvAOdc3XymqDDPHx1BgPgsdAA5SIifona89YtRATDzw==}
@@ -5213,6 +5222,8 @@ snapshots:
   destr@2.0.5: {}
 
   detect-libc@2.1.2: {}
+
+  devtools-protocol@0.0.1658499: {}
 
   didyoumean@1.2.2: {}
 
