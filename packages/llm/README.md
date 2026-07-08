@@ -21,7 +21,15 @@ objects), and retries with schema-violation feedback up to `maxRetries` (default
 before returning a typed `LLM_STRUCTURED_PARSE_FAILED` / `LLM_STRUCTURED_VALIDATION_FAILED`
 error.
 
-Per-agent-role model routing lands in a later issue (#6) on top of this same
-`LlmProvider` surface.
+`createModelRouter(createProvider, config)` assigns a distinct provider+model+params to
+each agent role (`planner | navigator | verifier | critic`) via a Zod-validated
+`ModelRoutingConfig`. `createProvider` is typically `registry.create.bind(registry)`
+(injected rather than a concrete `ProviderRegistry` dependency, so routing logic is
+testable without real provider adapters). The resolved `LlmProvider` auto-applies each
+role's configured (or role-default) temperature/`maxOutputTokens` unless a caller
+overrides them per-request — Planner runs hotter (more exploratory re-planning), Navigator/
+Verifier/Critic run cold (narrow, low-variance judgment calls). There is no default
+_provider_ (BYOK means the user always configures one), only default params.
+`saveModelRoutingConfig`/`loadModelRoutingConfig` persist it through any `StoragePort`.
 
 Depends on `@aegis/shared`.
