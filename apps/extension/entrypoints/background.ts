@@ -1,9 +1,11 @@
-import { PACKAGE_NAME } from '@aegis/shared';
+import { createLogger } from '@aegis/shared';
+
+const logger = createLogger('background');
 
 export default defineBackground(() => {
-  console.log(`${PACKAGE_NAME} background service worker started`);
+  logger.info('background service worker started');
 
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error: unknown) => {
-    console.error('Failed to set side panel behavior', error);
+    logger.error('Failed to set side panel behavior', { error });
   });
 });
