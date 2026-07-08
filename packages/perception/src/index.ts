@@ -8,3 +8,9 @@ export type { ElementBounds, PerceptionSource, PerceivedElement } from './ax/per
 export type { NormalizedAxTree } from './ax/ax-tree-normalizer';
 export { normalizeAxTree } from './ax/ax-tree-normalizer';
 export { getPerceivedAxTree } from './ax/ax-tree-source';
+
+export { pruneInteractiveElements } from './dom/interactive-pruner';
+export type { ExtractedContent } from './dom/readable-content';
+export { extractReadableContent } from './dom/readable-content';
+export type { DomPerception, DomPerceptionOptions } from './dom/dom-source';
+export { getDomPerception } from './dom/dom-source';

@@ -24,7 +24,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #7 CDP session manager — blocked by: #3
 - [x] #8 Accessibility-tree extractor & normalizer — blocked by: #7
-- [ ] #9 DOM pruner & content extractor — blocked by: #7
+- [x] #9 DOM pruner & content extractor — blocked by: #7
 - [ ] #10 Perception aggregator & budgeter — blocked by: #8, #9
 - [ ] #11 Vision fallback (scaffold) — blocked by: #10
 
