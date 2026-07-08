@@ -22,7 +22,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M2 — Perception
 
-- [ ] #7 CDP session manager — blocked by: #3
+- [x] #7 CDP session manager — blocked by: #3
 - [ ] #8 Accessibility-tree extractor & normalizer — blocked by: #7
 - [ ] #9 DOM pruner & content extractor — blocked by: #7
 - [ ] #10 Perception aggregator & budgeter — blocked by: #8, #9

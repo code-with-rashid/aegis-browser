@@ -16,7 +16,9 @@
     "@aegis/shared": "workspace:*"
   },
   "devDependencies": {
+    "@types/chrome": "^0.0.280",
     "@vitest/coverage-v8": "^4.1.10",
+    "devtools-protocol": "^0.0.1658499",
     "typescript": "^5.6.0",
     "vitest": "^4.1.10"
   }
