@@ -31,7 +31,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M3 — Actions
 
 - [x] #12 Action schema registry & risk classifier — blocked by: #3
-- [ ] #13 CDP action executors — blocked by: #12, #8, #7
+- [x] #13 CDP action executors — blocked by: #12, #8, #7
 - [ ] #14 Action runner — blocked by: #13
 
 ### M4 — Agent loop
@@ -78,6 +78,9 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [0003](docs/adr/0003-perception-aggregator-scope.md) — AX/DOM ref merging by shared
   backend node id, and "compress history" scoped to compressing one payload (the agent
   loop owns history-list policy).
+- [0004](docs/adr/0004-tab-actions-via-chrome-tabs-not-cdp-target.md) — Tab actions
+  (open/switch/close) go through a `chrome.tabs`-backed `TabManager` port, not CDP's
+  `Target` domain, since CDP target ids and `chrome.tabs` ids are different id spaces.
 
 ## Notes
 
