@@ -16,7 +16,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M1 — LLM layer (BYOK)
 
-- [ ] #4 Provider registry & LLM client — blocked by: #3
+- [x] #4 Provider registry & LLM client — blocked by: #3
 - [ ] #5 Structured output + JSON-repair — blocked by: #4
 - [ ] #6 Per-agent model routing — blocked by: #4, #3
 
@@ -69,7 +69,9 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ## ADR log
 
-(none yet — add entries here as `docs/adr/NNNN-title.md` decisions are made)
+- [0001](docs/adr/0001-ollama-via-openai-compatible.md) — Ollama support implemented as a
+  preset over the generic OpenAI-compatible adapter rather than a dedicated SDK
+  dependency.
 
 ## Notes
 
