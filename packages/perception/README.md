@@ -39,4 +39,22 @@ page yields the same ref for the same element without any per-session ref regist
 `bounds` is left unset here; it's filled in once DOM cross-referencing is available (the
 DOM pruner / perception aggregator, #9-#10).
 
+## DOM pruner & readable content
+
+`getDomPerception(session)` (`dom/dom-source.ts`) enables the `DOM` domain and pulls the
+whole document (`depth: -1, pierce: true`, so iframes/shadow roots are included) in one
+CDP round trip, then derives two merge-ready outputs from that single tree:
+
+- `pruneInteractiveElements` (`dom/interactive-pruner.ts`) — links, buttons, form
+  controls, `<option>`s, and anything with an interactive ARIA role/tabindex/click
+  handler, tagged `source: 'dom'` (refs derived from `backendNodeId` as `dom:<id>`, same
+  stability guarantee as the AX extractor).
+- `extractReadableContent` (`dom/readable-content.ts`) — the page's main readable content
+  (article/list body text). This re-enables what Nanobrowser disabled after real content
+  extraction proved unreliable: candidate containers (`article`/`main`/`section`/`div`/`body`)
+  are scored by text density (text length minus link text, boosted by paragraph count and
+  an `article`/`main` tag bonus), boilerplate (`nav`/`header`/`footer`/`script`/`style`/`aside`/`form`/`button`)
+  is discarded, and the winning container's block-level text (`p`/`li`/`h1-h6`/`blockquote`/`td`/`pre`)
+  is joined and capped at `maxLength` (default 4000 chars), reporting whether it truncated.
+
 Depends on `@aegis/llm`, `@aegis/shared`.
