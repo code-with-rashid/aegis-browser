@@ -57,4 +57,29 @@ CDP round trip, then derives two merge-ready outputs from that single tree:
   is discarded, and the winning container's block-level text (`p`/`li`/`h1-h6`/`blockquote`/`td`/`pre`)
   is joined and capped at `maxLength` (default 4000 chars), reporting whether it truncated.
 
+## Perception aggregator & budgeter
+
+`getPerceptionPayload(session, { goal, maxTokens?, maxContentLength? })`
+(`aggregator/perception-source.ts`) is the perception pipeline's single entry point: it
+pulls the AX tree and the DOM pass over one `CdpSession`, then produces one
+`PerceptionPayload` (`aggregator/perception-payload.ts`) via:
+
+- `mergeElements` (`aggregator/merge-elements.ts`) — AX and DOM elements referring to the
+  same physical node (matched by the backend node id embedded in `ax:<id>`/`dom:<id>`
+  refs) are merged into one entry, re-keyed to a source-agnostic `el:<id>` ref. AX wins
+  on real (non-`"unknown"`/non-empty) values; DOM fills gaps — see
+  `docs/adr/0003-perception-aggregator-scope.md`.
+- `rankByRelevance` (`aggregator/relevance.ts`) — a dependency-free keyword-overlap
+  heuristic against the agent's current goal; stable-sorted, so ranking is deterministic.
+- `aggregatePerception` (`aggregator/perception-payload.ts`) — takes elements in rank
+  order until `maxTokens` (default 2000) is spent, using `estimateTokens`
+  (`aggregator/token-estimate.ts`, a ~4-chars-per-token heuristic — no tokenizer
+  dependency), then fits as much of the readable content as remains, truncating and
+  reporting `truncated: true` deterministically once the budget is exceeded.
+- `compressForHistory` (`aggregator/history-compression.ts`) — reduces a past
+  `PerceptionPayload` to a minimal `{elementCount, topElements (ref/role/name only),
+contentSummary, tokenEstimate}` for the agent loop to keep as history across many turns
+  without blowing the prompt budget (see ADR 0003 for why this is scoped as "compress one
+  payload," not "manage the history list").
+
 Depends on `@aegis/llm`, `@aegis/shared`.
