@@ -32,7 +32,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #12 Action schema registry & risk classifier — blocked by: #3
 - [x] #13 CDP action executors — blocked by: #12, #8, #7
-- [ ] #14 Action runner — blocked by: #13
+- [x] #14 Action runner — blocked by: #13
 
 ### M4 — Agent loop
 

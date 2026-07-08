@@ -42,3 +42,12 @@ export type { TabManager } from './tabs/tab-manager';
 export { createChromeTabManager } from './tabs/chrome-tab-manager';
 export type { FakeTabManager } from './tabs/fake-tab-manager';
 export { createFakeTabManager } from './tabs/fake-tab-manager';
+
+export { actionSignature } from './runner/action-signature';
+export type {
+  ActionRunResult,
+  RunActionsOptions,
+  RunOutcome,
+  ActionRunner,
+} from './runner/action-runner';
+export { createActionRunner } from './runner/action-runner';

@@ -62,4 +62,29 @@ On any executor failure, `executeAction` best-effort attaches a screenshot
 (`ActionExecutionError.screenshot`) via `@aegis/perception`'s `captureScreenshot` — a
 screenshot-capture failure never masks the original error.
 
+## Action runner
+
+`createActionRunner()` (`runner/action-runner.ts`) orchestrates `executeAction` calls
+with resilience, returning a `RunOutcome` of `'completed' | 'failed' | 'stalled' |
+'aborted'`:
+
+- **Sequential execution** — one action list at a time, each awaited before the next
+  (browser actions mutate shared page state, so they can't run concurrently).
+- **Bounded retry** — a failing action is retried up to `maxRetries` times (default 2,
+  so 3 attempts total) with a delay between attempts (default 250ms), on the theory that
+  some CDP failures are transient (a page still loading, a momentary detach).
+- **Captured history** — every attempted action, its attempt count, and its `Result` are
+  appended to `runner.history`, persisting across many `run()` calls so the agent loop /
+  trace UI has a full record; `reset()` clears it for a fresh sub-task.
+- **Stall detection** — before executing each action, `wouldStall` checks whether doing
+  so would extend a run of `stallThreshold` (default 3) consecutive actions with the same
+  `actionSignature` (`runner/action-signature.ts`: same type + same ref/url/tabId). This
+  is deliberately checked **across** `run()` calls, not just within one list — a planner
+  re-issuing the identical click turn after turn (because the page didn't change the way
+  it expected) is the actual stall this is built to catch, and it surfaces as
+  `{ kind: 'stalled' }` so the agent loop knows to replan rather than keep retrying.
+- **Abort support** — an `AbortSignal` is checked before each action and during retry
+  delays (an abortable `sleep`), so a user-initiated stop takes effect promptly rather
+  than waiting for the current action's retries to exhaust.
+
 Depends on `@aegis/perception`, `@aegis/shared`.
