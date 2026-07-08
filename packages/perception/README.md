@@ -26,4 +26,17 @@ that CDP gives us over a content-script-only approach. `chrome.debugger.onDetach
 `chrome.debugger` listeners) stay correct if the user dismisses the banner or closes the
 tab, instead of leaking a stale attachment or a dangling listener.
 
+## Accessibility tree
+
+`getPerceivedAxTree(session)` (`ax/ax-tree-source.ts`) enables the `Accessibility` domain
+and pulls `Accessibility.getFullAXTree` over a `CdpSession`, then normalizes the raw
+`AXNode[]` via `normalizeAxTree` (`ax/ax-tree-normalizer.ts`) into `PerceivedElement[]`
+(`ax/perceived-element.ts`) plus a `refToBackendNodeId` map the action layer will use to
+resolve a `ref` back to a real DOM node. Nodes CDP marks `ignored` and nodes with no
+backing DOM node are dropped — they aren't something an action could target. Each ref is
+derived deterministically from `backendDOMNodeId` (`ax:<id>`), so re-reading the same
+page yields the same ref for the same element without any per-session ref registry.
+`bounds` is left unset here; it's filled in once DOM cross-referencing is available (the
+DOM pruner / perception aggregator, #9-#10).
+
 Depends on `@aegis/llm`, `@aegis/shared`.
