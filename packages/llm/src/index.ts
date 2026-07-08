@@ -21,3 +21,8 @@ export { createAnthropicProvider } from './adapters/anthropic-provider';
 export { createGoogleProvider } from './adapters/google-provider';
 export { createOpenAiCompatibleProvider } from './adapters/openai-compatible-provider';
 export { createOllamaProvider } from './adapters/ollama-provider';
+
+export { parseAndRepairJson } from './json-repair';
+
+export type { GenerateStructuredOptions } from './generate-structured';
+export { generateStructured } from './generate-structured';

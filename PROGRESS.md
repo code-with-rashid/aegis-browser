@@ -17,7 +17,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M1 — LLM layer (BYOK)
 
 - [x] #4 Provider registry & LLM client — blocked by: #3
-- [ ] #5 Structured output + JSON-repair — blocked by: #4
+- [x] #5 Structured output + JSON-repair — blocked by: #4
 - [ ] #6 Per-agent model routing — blocked by: #4, #3
 
 ### M2 — Perception
@@ -72,6 +72,9 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [0001](docs/adr/0001-ollama-via-openai-compatible.md) — Ollama support implemented as a
   preset over the generic OpenAI-compatible adapter rather than a dedicated SDK
   dependency.
+- [0002](docs/adr/0002-structured-output-via-prompted-json-not-sdk-object-mode.md) —
+  `generateStructured` parses/repairs prompted JSON itself instead of the AI SDK's
+  (deprecated) `generateObject`/`Output.object` mode.
 
 ## Notes
 

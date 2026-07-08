@@ -1,8 +1,13 @@
 import { AegisError, type Result } from '@aegis/shared';
 
-/** Discriminates why an {@link LlmProvider} call failed. */
+/** Discriminates why an {@link LlmProvider} call (or `generateStructured`) failed. */
 export type LlmErrorCode =
-  'LLM_TIMEOUT' | 'LLM_ABORTED' | 'LLM_REQUEST_FAILED' | 'LLM_INVALID_CONFIG';
+  | 'LLM_TIMEOUT'
+  | 'LLM_ABORTED'
+  | 'LLM_REQUEST_FAILED'
+  | 'LLM_INVALID_CONFIG'
+  | 'LLM_STRUCTURED_PARSE_FAILED'
+  | 'LLM_STRUCTURED_VALIDATION_FAILED';
 
 /** Typed error raised by provider creation or a model call. */
 export class LlmError extends AegisError {
