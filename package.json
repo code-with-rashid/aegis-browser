@@ -1,0 +1,24 @@
+{
+  "name": "aegis-browser",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local-first, BYOK browser-automation agent for Chrome & Edge (MV3).",
+  "license": "MIT",
+  "packageManager": "pnpm@11.6.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "eval": "turbo run eval"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.0"
+  }
+}
