@@ -12,7 +12,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@aegis/shared": "workspace:*"
+    "@aegis/shared": "workspace:*",
+    "@ai-sdk/anthropic": "^4.0.10",
+    "@ai-sdk/google": "^4.0.10",
+    "@ai-sdk/openai": "^4.0.9",
+    "@ai-sdk/openai-compatible": "^3.0.6",
+    "ai": "^7.0.18",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.10",
