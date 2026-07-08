@@ -14,3 +14,21 @@ export type { ExtractedContent } from './dom/readable-content';
 export { extractReadableContent } from './dom/readable-content';
 export type { DomPerception, DomPerceptionOptions } from './dom/dom-source';
 export { getDomPerception } from './dom/dom-source';
+
+export { mergeElements } from './aggregator/merge-elements';
+export { rankByRelevance } from './aggregator/relevance';
+export {
+  estimateTokens,
+  estimateElementTokens,
+  CHARS_PER_TOKEN,
+} from './aggregator/token-estimate';
+export type { PerceptionPayload, AggregatePerceptionInput } from './aggregator/perception-payload';
+export { aggregatePerception } from './aggregator/perception-payload';
+export type {
+  CompressedElementSummary,
+  CompressedPerceptionSummary,
+  CompressForHistoryOptions,
+} from './aggregator/history-compression';
+export { compressForHistory } from './aggregator/history-compression';
+export type { GetPerceptionPayloadOptions } from './aggregator/perception-source';
+export { getPerceptionPayload } from './aggregator/perception-source';
