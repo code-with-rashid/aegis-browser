@@ -30,7 +30,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M3 — Actions
 
-- [ ] #12 Action schema registry & risk classifier — blocked by: #3
+- [x] #12 Action schema registry & risk classifier — blocked by: #3
 - [ ] #13 CDP action executors — blocked by: #12, #8, #7
 - [ ] #14 Action runner — blocked by: #13
 

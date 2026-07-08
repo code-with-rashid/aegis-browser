@@ -1,2 +1,12 @@
-/** Browser actions: Zod schemas + risk metadata, CDP executors, and the resilient action runner. */
-export const PACKAGE_NAME = '@aegis/actions';
+export * from './schema';
+
+export type { ActionRisk, ActionRiskContext } from './risk';
+export { STATE_CHANGING_KEYWORDS, classifyActionRisk, elevateRisk } from './risk';
+
+export type { ActionValidationErrorCode, RegisteredAction, ActionDescriptor } from './registry';
+export {
+  ActionValidationError,
+  ActionRegistry,
+  createDefaultActionRegistry,
+  validateAction,
+} from './registry';

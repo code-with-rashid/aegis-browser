@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@aegis/perception": "workspace:*",
-    "@aegis/shared": "workspace:*"
+    "@aegis/shared": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.10",
