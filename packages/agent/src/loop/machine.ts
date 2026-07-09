@@ -244,6 +244,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
         invoke: {
           src: 'decideActor',
           input: ({ context }) => ({
+            task: context.task,
             subGoal: context.subGoal ?? context.task,
             perception: assertDefined(context.perception, 'deciding requires perception'),
           }),

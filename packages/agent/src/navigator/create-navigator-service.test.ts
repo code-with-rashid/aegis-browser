@@ -21,7 +21,11 @@ function perceptionFixture(): PerceptionPayload {
   };
 }
 
-const baseInput: DecideInput = { subGoal: 'Submit the form', perception: perceptionFixture() };
+const baseInput: DecideInput = {
+  task: 'Fill out and submit the form',
+  subGoal: 'Submit the form',
+  perception: perceptionFixture(),
+};
 
 function brainJson(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
@@ -129,6 +133,7 @@ describe('createNavigatorService', () => {
     const decide = createNavigatorService(routerFor(provider), { sanitize: () => '[REDACTED]' });
 
     await decide({
+      task: 'Fill out and submit the form',
       subGoal: 'Submit the form',
       perception: {
         ...perceptionFixture(),

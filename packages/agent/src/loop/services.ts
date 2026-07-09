@@ -54,6 +54,9 @@ export type PlannerService = (
 ) => Promise<Result<PlanOutput, AgentError>>;
 
 export interface DecideInput {
+  /** The user's original, trusted task — grounding for literal values (codes, search
+   * terms, exact strings) that a Planner-paraphrased `subGoal` may not restate. */
+  readonly task: string;
   readonly subGoal: string;
   readonly perception: PerceptionPayload;
 }

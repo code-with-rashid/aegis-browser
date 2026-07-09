@@ -2,8 +2,15 @@ import type { DecideInput } from '../loop/services';
 import { identitySanitize, wrapUntrustedContent, type SanitizeText } from '../sanitize';
 
 export const NAVIGATOR_SYSTEM_PROMPT = [
-  'You are the Navigator for a browser automation agent. Given the current sub-goal and',
-  "the page's currently perceived state, you choose the next 1-4 concrete action(s).",
+  'You are the Navigator for a browser automation agent. Given the overall task, the',
+  "current sub-goal, and the page's currently perceived state, you choose the next 1-4",
+  'concrete action(s).',
+  '',
+  'The sub-goal is a paraphrase and may not restate every literal value (a code, a search',
+  'term, an exact string to type) from the overall task. When a value the sub-goal needs',
+  "isn't spelled out in the sub-goal itself, use the overall task's own wording — never",
+  'invent, template, or placeholder a value (e.g. never write something like',
+  '"<access_code>" or "<value>" as if it were real input).',
   '',
   'Every action that targets an element MUST use one of the refs listed in "Available',
   'elements" below, copied verbatim. Never invent a ref, guess one, or reuse one from a',
@@ -44,7 +51,7 @@ export function buildNavigatorPrompt(
   options: BuildNavigatorPromptOptions = {},
 ): string {
   const sanitize = options.sanitize ?? identitySanitize;
-  const lines: string[] = [`Sub-goal: ${input.subGoal}`, ''];
+  const lines: string[] = [`Overall task: ${input.task}`, `Sub-goal: ${input.subGoal}`, ''];
 
   const elementList = input.perception.elements.map(formatElement).join('\n');
   lines.push('Available elements (use these refs verbatim):', elementList || '(none)');

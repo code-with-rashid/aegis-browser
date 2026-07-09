@@ -87,6 +87,29 @@ describe('agent loop machine', () => {
     expect(snapshot.context.verifyOutcome).toBe('achieved');
   });
 
+  it('gives the Navigator the overall task, not just the (possibly paraphrased) sub-goal (#77)', async () => {
+    const decideInputs: unknown[] = [];
+    const services = mockServices({
+      decide: (input) => {
+        decideInputs.push(input);
+        return Promise.resolve(
+          ok({ actions: [{ type: 'click', ref: toElementRef('ax:1') }], stuck: false }),
+        );
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, {
+      input: { task: 'Enter access code 1234 to unlock the members area', tabId: 1 },
+    });
+    actor.start();
+
+    await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(decideInputs).toContainEqual(
+      expect.objectContaining({ task: 'Enter access code 1234 to unlock the members area' }),
+    );
+  });
+
   it('finishes immediately when the planner reports the task already complete', async () => {
     const services = mockServices({
       plan: () =>
