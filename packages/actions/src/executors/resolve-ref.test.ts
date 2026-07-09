@@ -2,7 +2,7 @@ import { err, isErr, isOk, ok, toElementRef } from '@aegis/shared';
 import { CdpError, createFakeCdp } from '@aegis/perception';
 import { describe, expect, it } from 'vitest';
 
-import { backendNodeIdOfRef, focusElement, resolveRef } from './resolve-ref';
+import { backendNodeIdOfRef, focusElement, resolveRef, selectElementContent } from './resolve-ref';
 
 describe('backendNodeIdOfRef', () => {
   it.each([
@@ -89,6 +89,34 @@ describe('focusElement', () => {
     await cdp.attach();
 
     const result = await focusElement(cdp, 'obj-1');
+
+    expect(isErr(result) && result.error.code).toBe('CDP_SEND_FAILED');
+  });
+});
+
+describe('selectElementContent', () => {
+  it('calls Runtime.callFunctionOn with a selection declaration', async () => {
+    const cdp = createFakeCdp(1, {
+      onSend: (method, params) => {
+        expect(method).toBe('Runtime.callFunctionOn');
+        expect(params).toMatchObject({ objectId: 'obj-1' });
+        return ok({ result: { type: 'undefined' } });
+      },
+    });
+    await cdp.attach();
+
+    const result = await selectElementContent(cdp, 'obj-1');
+
+    expect(isOk(result)).toBe(true);
+  });
+
+  it('propagates a CDP failure', async () => {
+    const cdp = createFakeCdp(1, {
+      onSend: () => err(new CdpError('CDP_SEND_FAILED', 'boom')),
+    });
+    await cdp.attach();
+
+    const result = await selectElementContent(cdp, 'obj-1');
 
     expect(isErr(result) && result.error.code).toBe('CDP_SEND_FAILED');
   });

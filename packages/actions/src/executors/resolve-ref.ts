@@ -79,3 +79,36 @@ export async function focusElement(
   }
   return ok(undefined);
 }
+
+/**
+ * Selects all of a resolved (and already-focused) element's existing content, so a
+ * following `Input.insertText` replaces it instead of inserting at whatever cursor
+ * position `.focus()` left behind. Uses `.select()` for native form controls
+ * (input/textarea) and a `Range`-based selection for anything else (e.g. contenteditable).
+ */
+export async function selectElementContent(
+  session: CdpSession,
+  objectId: string,
+): Promise<Result<void, CdpError>> {
+  const result = await session.send('Runtime.callFunctionOn', {
+    objectId,
+    functionDeclaration: `function() {
+      if (typeof this.select === 'function') {
+        this.select();
+        return;
+      }
+      const range = document.createRange();
+      range.selectNodeContents(this);
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }`,
+    returnByValue: true,
+  });
+  if (isErr(result)) {
+    return result;
+  }
+  return ok(undefined);
+}
