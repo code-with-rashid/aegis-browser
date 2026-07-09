@@ -36,7 +36,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M4 — Agent loop
 
-- [ ] #15 XState loop machine — blocked by: #3, #14, #10
+- [x] #15 XState loop machine — blocked by: #3, #14, #10
 - [ ] #16 Planner agent — blocked by: #15, #5, #6, #10
 - [ ] #17 Navigator agent — blocked by: #15, #5, #6, #10, #12
 - [ ] #18 Verifier — blocked by: #15, #10
@@ -81,6 +81,9 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [0004](docs/adr/0004-tab-actions-via-chrome-tabs-not-cdp-target.md) — Tab actions
   (open/switch/close) go through a `chrome.tabs`-backed `TabManager` port, not CDP's
   `Target` domain, since CDP target ids and `chrome.tabs` ids are different id spaces.
+- [0005](docs/adr/0005-agent-loop-machine-design.md) — Agent loop machine adds a
+  `Planning -> Done` shortcut and a `Stopped` terminal beyond `docs/DESIGN.md`'s diagram;
+  persisted context never holds raw `Error` instances (plain-data summaries only).
 
 ## Notes
 
