@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Members Area</title>
+  </head>
+  <body>
+    <h1>Members Area</h1>
+    <div id="gate">
+      <label for="code">Access code</label>
+      <input id="code" type="text" />
+      <button
+        id="enter"
+        type="button"
+        onclick="
+          if (document.getElementById('code').value === '1234') {
+            document.getElementById('protected').hidden = false;
+            document.getElementById('gate').hidden = true;
+          }
+        "
+      >
+        Enter
+      </button>
+    </div>
+    <div id="protected" hidden>
+      <p>Secret fact: the vault opens at midnight.</p>
+    </div>
+  </body>
+</html>

@@ -132,6 +132,27 @@ again.
 - No "reveal" for an existing secret's value; re-adding an existing name overwrites it
   (the vault's `setSecret` is already an upsert).
 
+## E2E: read-only use cases (#31)
+
+See [ADR 0019](../../docs/adr/0019-e2e-read-only-use-cases.md). `e2e/` runs the real
+`.output/chrome-mv3` build, unpacked into a real headed Chromium window, against three
+local fixture pages (`e2e/fixtures/`) — "research & extract," "compare & summarize,"
+"authenticated read" — proving the full composition root end-to-end: `RunManager` →
+`buildLoopServices` → the real XState loop, real CDP perception, real CDP action
+executors.
+
+- `e2e/fake-model-server.ts` is the "mock/local model": a tiny local HTTP server
+  implementing just enough of the OpenAI chat-completions wire format for
+  `@ai-sdk/openai-compatible` to parse, seeded into `ModelRoutingConfig` via
+  `e2e/seed-storage.ts`. Each scenario (`e2e/scenarios/*.ts`) scripts its planner/
+  navigator/verifier responses; `e2e/find-ref.ts` extracts real element refs straight out
+  of the actual prompt text sent to the server, never hardcoding one.
+- Every scenario only proposes `read`/`input`-risk actions with element names chosen to
+  avoid `STATE_CHANGING_KEYWORDS` — genuinely read-only, no confirmation-gate interaction
+  (that's #32).
+- Run locally: `pnpm build && pnpm e2e` (headed; needs a real display). CI runs it as a
+  separate `e2e` job under `xvfb-run` on `ubuntu-latest`, apart from the four core gates.
+
 ## Commands
 
 ```bash
@@ -140,6 +161,7 @@ pnpm build    # production build to .output/chrome-mv3
 pnpm build:edge
 pnpm test     # vitest — messaging, store, and composition-root logic (no chrome.* needed);
               # confirmation-modal.test.tsx opts into a jsdom environment for DOM rendering
+pnpm e2e      # Playwright — the real built extension against local fixture pages (#31)
 ```
 
 ## Note on `chrome.debugger`
