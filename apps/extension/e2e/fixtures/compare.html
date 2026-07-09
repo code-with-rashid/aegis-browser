@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Plan Comparison</title>
+  </head>
+  <body>
+    <h1>Compare plans</h1>
+    <section>
+      <h2>Plan A</h2>
+      <p>Price: $10/mo</p>
+    </section>
+    <section>
+      <h2>Plan B</h2>
+      <p id="plan-b-price" hidden>Price: $8/mo</p>
+      <button
+        id="reveal"
+        type="button"
+        onclick="
+          document.getElementById('plan-b-price').hidden = false;
+          this.hidden = true;
+        "
+      >
+        Reveal Plan B price
+      </button>
+    </section>
+  </body>
+</html>
