@@ -33,7 +33,7 @@ function mockServices(overrides: Partial<LoopServices> = {}): LoopServices {
       ),
     checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: false })),
     act: () => Promise.resolve({ kind: 'completed', results: [] }),
-    verify: () => Promise.resolve(ok({ subGoalComplete: true, taskComplete: true })),
+    verify: () => Promise.resolve(ok({ outcome: 'achieved', taskComplete: true })),
     ...overrides,
   };
 }
@@ -171,6 +171,32 @@ describe('agent loop machine', () => {
     expect(snapshot.context.lastError?.code).toBe('ACTION_RUN_FAILED');
   });
 
+  it('replans when the verifier reports the sub-goal attempt failed', async () => {
+    let verifyCalls = 0;
+    let planCalls = 0;
+    const services = mockServices({
+      plan: () => {
+        planCalls += 1;
+        return Promise.resolve(
+          ok({ subGoal: `attempt ${planCalls}`, taskComplete: planCalls > 1 }),
+        );
+      },
+      verify: () => {
+        verifyCalls += 1;
+        return Promise.resolve(ok({ outcome: 'failed', taskComplete: false }));
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Dead-end task', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('done');
+    expect(verifyCalls).toBe(1);
+    expect(planCalls).toBe(2);
+  });
+
   it('fails when a service reports an error', async () => {
     const services = mockServices({
       decide: () =>
@@ -195,7 +221,7 @@ describe('agent loop machine', () => {
       verify: () => {
         verifyCalls += 1;
         return Promise.resolve(
-          ok({ subGoalComplete: verifyCalls > 1, taskComplete: verifyCalls > 1 }),
+          ok({ outcome: verifyCalls > 1 ? 'achieved' : 'continue', taskComplete: verifyCalls > 1 }),
         );
       },
     });

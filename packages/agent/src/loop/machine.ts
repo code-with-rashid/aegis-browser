@@ -324,6 +324,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
         invoke: {
           src: 'verifyActor',
           input: ({ context }) => ({
+            task: context.task,
             subGoal: context.subGoal ?? context.task,
             perception: assertDefined(context.perception, 'verifying requires perception'),
             runSummary: assertDefined(context.lastRunSummary, 'verifying requires a run summary'),
@@ -338,12 +339,20 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
               }),
             },
             {
-              guard: ({ event }) => !isErr(event.output) && event.output.value.taskComplete,
+              guard: ({ event }) =>
+                !isErr(event.output) &&
+                event.output.value.outcome === 'achieved' &&
+                event.output.value.taskComplete,
               target: 'done',
             },
             {
-              guard: ({ event }) => !isErr(event.output) && event.output.value.subGoalComplete,
+              guard: ({ event }) =>
+                !isErr(event.output) && event.output.value.outcome === 'achieved',
               target: 'planning',
+            },
+            {
+              guard: ({ event }) => !isErr(event.output) && event.output.value.outcome === 'failed',
+              target: 'replanning',
             },
             { target: 'perceiving' },
           ],

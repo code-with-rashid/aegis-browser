@@ -17,6 +17,7 @@ export type {
   ActService,
   VerifyInput,
   VerifyOutput,
+  VerifyOutcome,
   VerifierService,
 } from './loop/services';
 
@@ -55,3 +56,10 @@ export { NAVIGATOR_SYSTEM_PROMPT, buildNavigatorPrompt } from './navigator/promp
 export { findHallucinatedRefs } from './navigator/hallucinated-refs';
 export type { CreateNavigatorServiceOptions } from './navigator/create-navigator-service';
 export { createNavigatorService } from './navigator/create-navigator-service';
+
+export type { VerifierLlmOutput } from './verifier/schema';
+export { VerifierOutputSchema } from './verifier/schema';
+export type { BuildVerifierPromptOptions } from './verifier/prompt';
+export { VERIFIER_SYSTEM_PROMPT, buildVerifierPrompt } from './verifier/prompt';
+export type { CreateVerifierServiceOptions } from './verifier/create-verifier-service';
+export { createVerifierService } from './verifier/create-verifier-service';

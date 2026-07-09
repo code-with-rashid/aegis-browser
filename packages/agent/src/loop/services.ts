@@ -79,13 +79,25 @@ export type ActService = (
 ) => Promise<RunOutcome>;
 
 export interface VerifyInput {
+  /** The overall user task — needed to judge `taskComplete`, not just this sub-goal. */
+  readonly task: string;
   readonly subGoal: string;
+  /** Perception taken AFTER acting — verification always looks at fresh, post-action state. */
   readonly perception: PerceptionPayload;
   /** A plain-data summary of the just-completed run (see `run-summary.ts`), not the raw `RunOutcome`. */
   readonly runSummary: RunSummary;
 }
+/**
+ * `achieved`: the sub-goal was met (check `taskComplete` for whether the whole task is
+ * now done too). `continue`: actions ran fine but the sub-goal isn't visibly met yet —
+ * try again. `failed`: this sub-goal attempt hit a dead end (e.g. the actions themselves
+ * errored) — replan rather than keep repeating the same approach.
+ */
+export type VerifyOutcome = 'achieved' | 'continue' | 'failed';
 export interface VerifyOutput {
-  readonly subGoalComplete: boolean;
+  readonly outcome: VerifyOutcome;
   readonly taskComplete: boolean;
+  /** The verifier's reasoning — for the trace UI (#26); the machine only reads the fields above. */
+  readonly reasoning?: string;
 }
 export type VerifierService = (input: VerifyInput) => Promise<Result<VerifyOutput, AgentError>>;
