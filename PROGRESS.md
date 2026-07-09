@@ -53,7 +53,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M6 — UI
 
 - [x] #25 Side panel shell & messaging bridge — blocked by: #3, #19
-- [ ] #26 Action trace / log UI — blocked by: #25, #15
+- [x] #26 Action trace / log UI — blocked by: #25, #15
 - [ ] #27 Confirmation gate UI — blocked by: #25, #22
 - [ ] #28 Options — models & keys — blocked by: #25, #6
 - [ ] #29 Options — permissions panel — blocked by: #25, #21
@@ -115,6 +115,10 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   to `@aegis/agent`'s per-batch `PolicyService`; two storage areas (session for loop
   state, local for durable config); one active run at a time with rehydration on
   startup; `LoopRunOutcome` gains `paused` so the UI can distinguish it from `active`.
+- [0014](docs/adr/0014-action-trace-log-ui.md) — Action trace: `@aegis/agent` gains
+  `buildTraceStep` (pure, per-step) but accumulation/persistence/broadcast lives in
+  `apps/extension`'s `run-manager.ts`; one `TraceStep[]` array serves both a live
+  timeline and a completed-run replay, no separate replay mode.
 
 ## Notes
 

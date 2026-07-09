@@ -1,4 +1,4 @@
-import type { LoopErrorSummary, LoopRunOutcome } from '@aegis/agent';
+import type { LoopErrorSummary, LoopRunOutcome, TraceStep } from '@aegis/agent';
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 
 import type { MessagePort } from '../../messaging/port';
@@ -14,6 +14,8 @@ export interface RunState {
   readonly taskSummary: string | undefined;
   readonly lastError: LoopErrorSummary | undefined;
   readonly startFailedReason: string | undefined;
+  /** The current run's trace, oldest first — the same array drives a live-updating timeline while a run is active and a replay of a completed run once it's done (#26). */
+  readonly trace: readonly TraceStep[];
   /** Function-typed properties, not method shorthand — selecting one out of the store (`useRunStore((s) => s.startRun)`) must not trip `@typescript-eslint/unbound-method`. */
   readonly setTask: (task: string) => void;
   readonly startRun: (tabId: number) => void;
@@ -47,7 +49,7 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
     port.onMessage((message: BackgroundToPanelMessage) => {
       switch (message.type) {
         case 'RUN_IDLE':
-          set({ ...INITIAL_RUN_FIELDS });
+          set({ ...INITIAL_RUN_FIELDS, trace: [] });
           return;
         case 'RUN_STATUS':
           set({
@@ -63,6 +65,12 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
         case 'RUN_START_FAILED':
           set({ startFailedReason: message.reason });
           return;
+        case 'TRACE_SNAPSHOT':
+          set({ trace: message.steps });
+          return;
+        case 'TRACE_STEP':
+          set((state) => ({ trace: [...state.trace, message.step] }));
+          return;
         default:
           return;
       }
@@ -71,6 +79,7 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
     return {
       ...INITIAL_RUN_FIELDS,
       task: '',
+      trace: [],
 
       setTask(task: string) {
         set({ task });

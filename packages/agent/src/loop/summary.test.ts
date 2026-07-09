@@ -20,6 +20,10 @@ function contextFixture(overrides: Partial<AgentLoopContext> = {}): AgentLoopCon
     taskSummary: undefined,
     pendingConfirmation: undefined,
     policyCheckReason: undefined,
+    plannerReasoning: undefined,
+    navigatorReasoning: undefined,
+    verifierReasoning: undefined,
+    verifyOutcome: undefined,
     ...overrides,
   };
 }

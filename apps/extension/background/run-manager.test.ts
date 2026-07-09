@@ -107,7 +107,7 @@ describe('createRunManager', () => {
 
     manager.registerPort(backgroundPort);
 
-    expect(received).toEqual([{ type: 'RUN_IDLE' }]);
+    expect(received).toEqual([{ type: 'RUN_IDLE' }, { type: 'TRACE_SNAPSHOT', steps: [] }]);
   });
 
   it('starts a run and broadcasts RUN_STATUS through to done', async () => {
@@ -253,6 +253,151 @@ describe('createRunManager', () => {
     });
   });
 
+  describe('trace', () => {
+    it('broadcasts a TRACE_STEP after each verify resolves, with reasoning and action results', async () => {
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop({
+          plan: () =>
+            Promise.resolve(
+              ok({
+                subGoal: 'find the item',
+                taskComplete: false,
+                reasoning: 'user wants oat milk',
+              }),
+            ),
+          decide: () =>
+            Promise.resolve(
+              ok({
+                actions: [{ type: 'click', ref: toElementRef('ax:1') }],
+                stuck: false,
+                reasoning: 'clicking the search result',
+              }),
+            ),
+          act: () =>
+            Promise.resolve({
+              kind: 'completed',
+              results: [
+                {
+                  action: { type: 'click', ref: toElementRef('ax:1') },
+                  attempt: 1,
+                  outcome: { ok: true, value: { kind: 'click' } },
+                },
+              ],
+            }),
+          verify: () =>
+            Promise.resolve(
+              ok({ outcome: 'achieved', taskComplete: true, reasoning: 'cart shows the item' }),
+            ),
+        }),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'Buy oat milk', tabId: 1 });
+      await waitForMessage(received, (m) => m.type === 'TRACE_STEP');
+
+      const traceStep = received.find((m) => m.type === 'TRACE_STEP');
+      expect(traceStep).toEqual({
+        type: 'TRACE_STEP',
+        step: {
+          stepNumber: 1,
+          subGoal: 'find the item',
+          plannerReasoning: 'user wants oat milk',
+          navigatorReasoning: 'clicking the search result',
+          actions: [{ description: 'Click "ax:1"', succeeded: true, errorMessage: undefined }],
+          verifyOutcome: 'achieved',
+          verifierReasoning: 'cart shows the item',
+          perception: perceptionFixture(),
+        },
+      });
+    });
+
+    it('accumulates multiple steps across replans, in order', async () => {
+      let verifyCalls = 0;
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop({
+          verify: () => {
+            verifyCalls += 1;
+            return Promise.resolve(
+              ok({
+                outcome: verifyCalls > 1 ? 'achieved' : 'continue',
+                taskComplete: verifyCalls > 1,
+              }),
+            );
+          },
+        }),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'Buy oat milk', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'done',
+      );
+
+      const steps = received.filter((m) => m.type === 'TRACE_STEP');
+      expect(steps.map((m) => m.step.stepNumber)).toEqual([1, 2]);
+    });
+
+    it('sends the accumulated trace as a TRACE_SNAPSHOT to a port that connects mid-run', async () => {
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop(),
+      );
+      const { panelPort: firstPanel, backgroundPort: firstBackground } = panelPorts();
+      manager.registerPort(firstBackground);
+
+      const firstReceived: BackgroundToPanelMessage[] = [];
+      firstPanel.onMessage((message) => firstReceived.push(message));
+      firstPanel.send({ type: 'START_RUN', task: 'Buy oat milk', tabId: 1 });
+      await waitForMessage(firstReceived, (m) => m.type === 'TRACE_STEP');
+
+      const { panelPort: latePanel, backgroundPort: lateBackground } = panelPorts();
+      const lateReceived: BackgroundToPanelMessage[] = [];
+      latePanel.onMessage((message) => lateReceived.push(message));
+      manager.registerPort(lateBackground);
+
+      const snapshot = lateReceived.find((m) => m.type === 'TRACE_SNAPSHOT');
+      expect(snapshot?.type).toBe('TRACE_SNAPSHOT');
+      expect(snapshot?.type === 'TRACE_SNAPSHOT' && snapshot.steps).toHaveLength(1);
+    });
+
+    it('resets the trace when a new run starts', async () => {
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop(),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'First task', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'done',
+      );
+
+      received.length = 0;
+      panelPort.send({ type: 'START_RUN', task: 'Second task', tabId: 1 });
+      await waitForMessage(received, (m) => m.type === 'TRACE_SNAPSHOT');
+
+      const resetSnapshot = received.find((m) => m.type === 'TRACE_SNAPSHOT');
+      expect(resetSnapshot?.type === 'TRACE_SNAPSHOT' && resetSnapshot.steps).toEqual([]);
+    });
+  });
+
   describe('initialize', () => {
     it('does nothing when no snapshot is persisted', async () => {
       const manager = createRunManager(
@@ -307,6 +452,7 @@ describe('createRunManager', () => {
 
       expect(received).toEqual([
         { type: 'RUN_STATUS', summary: expect.objectContaining({ outcome: 'active' }) },
+        { type: 'TRACE_SNAPSHOT', steps: [] },
       ]);
 
       panelPort.send({ type: 'STOP_RUN' });

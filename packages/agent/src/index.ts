@@ -59,6 +59,9 @@ export {
 export type { LoopRunOutcome, LoopRunSummary, LoopSnapshotLike } from './loop/summary';
 export { summarizeLoopRun } from './loop/summary';
 
+export type { TraceActionEntry, TraceStep } from './loop/trace';
+export { buildTraceStep } from './loop/trace';
+
 export type { SanitizeText } from './sanitize';
 export { identitySanitize, wrapUntrustedContent } from './sanitize';
 
