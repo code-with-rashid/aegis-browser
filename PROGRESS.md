@@ -48,7 +48,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #21 Security policy engine — blocked by: #12, #3
 - [x] #22 Confirmation gate — blocked by: #21, #15
 - [x] #23 Alignment critic — blocked by: #21, #5
-- [ ] #24 Secret vault & native fill — blocked by: #3, #13
+- [x] #24 Secret vault & native fill — blocked by: #3, #13
 
 ### M6 — UI
 
@@ -105,6 +105,11 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   between `policyCheck` and `confirming`; `!aligned` routes to `replanning` (never asks
   the human), same pattern as a policy `deny`; always calls the model (no heuristic
   shortcut, unlike the Verifier — alignment is inherently semantic).
+- [0012](docs/adr/0012-secret-vault.md) — Secret vault: a canary record (a known
+  plaintext, encrypted under the derived key) detects a wrong passphrase safely even on
+  an empty vault; placeholder resolution lives in `@aegis/security` (not
+  `@aegis/actions`, wrong layering direction), as a pre-processing step before an action
+  reaches the existing CDP executors.
 
 ## Notes
 
