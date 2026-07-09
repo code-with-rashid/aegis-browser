@@ -106,4 +106,29 @@ still can't self-correct, the decision resolves as `{ actions: [], stuck: true }
 `stuck`, not a hard failure, so the loop replans instead of aborting the whole task over
 a model that got confused.
 
+## The Verifier
+
+`createVerifierService(modelRouter, options?)` (`verifier/create-verifier-service.ts`)
+builds the `VerifierService` the loop machine invokes in `verifying`, always against
+**fresh, post-action perception** — its whole point is preventing the "declared success
+but nothing happened" failure class (`docs/DESIGN.md` §5).
+
+It's both a heuristic and a cheap-model check, in order — see
+`docs/adr/0007-verifier-outcome-and-replanning.md`:
+
+- **Heuristic first, no model call**: if any action in the run summary didn't
+  mechanically succeed (or the run wasn't `'completed'` at all), the sub-goal plainly
+  wasn't achieved — `{ outcome: 'failed', taskComplete: false }` immediately.
+- **Cheap model, only when every action succeeded**: `generateStructured` against the
+  `verifier` role (low default temperature) judges whether the sub-goal's _intent_ was
+  actually satisfied, not just whether actions ran without error — a click landing on the
+  wrong element still "succeeds" mechanically but achieves nothing.
+
+`outcome` is three-way (`'achieved' | 'continue' | 'failed'`, `loop/services.ts`), not
+the two booleans #15 originally shipped — `'failed'` routes to a new
+`Verifying -> Replanning` edge (`'continue'` still goes to `Perceiving`, to keep trying
+the same sub-goal). `taskComplete` is clamped to `false` whenever the model doesn't also
+report `subGoalAchieved: true`, so a confused/contradictory model response can't produce
+a nonsensical "task complete but sub-goal not achieved" result.
+
 Depends on `@aegis/actions`, `@aegis/llm`, `@aegis/perception`, `@aegis/shared`.

@@ -39,7 +39,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #15 XState loop machine — blocked by: #3, #14, #10
 - [x] #16 Planner agent — blocked by: #15, #5, #6, #10
 - [x] #17 Navigator agent — blocked by: #15, #5, #6, #10, #12
-- [ ] #18 Verifier — blocked by: #15, #10
+- [x] #18 Verifier — blocked by: #15, #10
 - [ ] #19 Loop guardrails & controls — blocked by: #15, #14
 
 ### M5 — Security core
@@ -87,6 +87,9 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [0006](docs/adr/0006-navigator-llm-action-schema-mirror.md) — Navigator validates LLM
   output against a transform-free mirror of `ActionSchema` (`z.toJSONSchema` can't
   represent `.transform()`), then re-parses through the real schema to get branded refs.
+- [0007](docs/adr/0007-verifier-outcome-and-replanning.md) — Verifier outcome is
+  three-way (`achieved`/`continue`/`failed`), with a new `Verifying -> Replanning` edge
+  for `failed`; heuristic-first (any action failure ⇒ `failed`, no model call needed).
 
 ## Notes
 

@@ -34,7 +34,7 @@ function mockServices(overrides: Partial<LoopServices> = {}): LoopServices {
     decide: () => Promise.resolve(ok({ actions: [], stuck: false })),
     checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: true })),
     act: () => Promise.resolve({ kind: 'completed', results: [] }),
-    verify: () => Promise.resolve(ok({ subGoalComplete: true, taskComplete: true })),
+    verify: () => Promise.resolve(ok({ outcome: 'achieved', taskComplete: true })),
     ...overrides,
   };
 }
