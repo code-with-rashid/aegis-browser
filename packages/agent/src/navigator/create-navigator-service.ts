@@ -40,7 +40,7 @@ export function createNavigatorService(
   modelRouter: ModelRouter,
   options: CreateNavigatorServiceOptions = {},
 ): NavigatorService {
-  return async (input: DecideInput) => {
+  return async (input: DecideInput, signal?: AbortSignal) => {
     const providerResult = modelRouter.resolve('navigator');
     if (isErr(providerResult)) {
       return err(
@@ -60,6 +60,7 @@ export function createNavigatorService(
 
       const result = await generateStructured(providerResult.value, NavigatorOutputSchema, prompt, {
         system: NAVIGATOR_SYSTEM_PROMPT,
+        ...(signal !== undefined ? { signal } : {}),
         ...options.generateStructuredOptions,
       });
       if (isErr(result)) {

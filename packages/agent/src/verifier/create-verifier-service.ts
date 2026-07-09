@@ -29,7 +29,7 @@ export function createVerifierService(
   modelRouter: ModelRouter,
   options: CreateVerifierServiceOptions = {},
 ): VerifierService {
-  return async (input: VerifyInput) => {
+  return async (input: VerifyInput, signal?: AbortSignal) => {
     if (
       input.runSummary.kind !== 'completed' ||
       input.runSummary.actions.some((a) => !a.succeeded)
@@ -53,6 +53,7 @@ export function createVerifierService(
     );
     const result = await generateStructured(providerResult.value, VerifierOutputSchema, prompt, {
       system: VERIFIER_SYSTEM_PROMPT,
+      ...(signal !== undefined ? { signal } : {}),
       ...options.generateStructuredOptions,
     });
     if (isErr(result)) {

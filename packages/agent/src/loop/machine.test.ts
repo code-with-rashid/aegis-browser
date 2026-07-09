@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { AgentError } from './errors';
 import { createAgentLoopMachine } from './machine';
 import type { LoopServices } from './services';
+import { summarizeLoopRun } from './summary';
 
 const WAIT_TIMEOUT = 1000;
 
@@ -304,5 +305,104 @@ describe('agent loop machine', () => {
     const finalSnapshot = await waitFor(secondActor, isFinalized, { timeout: WAIT_TIMEOUT });
 
     expect(finalSnapshot.value).toBe('done');
+  });
+
+  it('fails with MAX_STEPS_EXCEEDED rather than looping forever', async () => {
+    let actCalls = 0;
+    const services = mockServices({
+      act: () => {
+        actCalls += 1;
+        return Promise.resolve({ kind: 'completed', results: [] });
+      },
+      // Never reports the sub-goal achieved, so without a step budget this would loop forever.
+      verify: () => Promise.resolve(ok({ outcome: 'continue', taskComplete: false })),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, {
+      input: { task: 'Never-ending task', tabId: 1, maxSteps: 3 },
+    });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('failed');
+    expect(snapshot.context.lastError?.code).toBe('MAX_STEPS_EXCEEDED');
+    expect(actCalls).toBe(3);
+  });
+
+  it('fails with MAX_REPLANS_EXCEEDED rather than looping forever', async () => {
+    let decideCalls = 0;
+    const services = mockServices({
+      // Always stuck, so without a replan budget this would loop forever.
+      decide: () => {
+        decideCalls += 1;
+        return Promise.resolve(ok({ actions: [], stuck: true }));
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, {
+      input: { task: 'Always stuck', tabId: 1, maxReplans: 3 },
+    });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('failed');
+    expect(snapshot.context.lastError?.code).toBe('MAX_REPLANS_EXCEEDED');
+    // the initial decide + one per replan attempt before the budget check kicks in
+    expect(decideCalls).toBe(4);
+  });
+
+  it('aborts the signal passed to a service when STOP exits its state mid-invoke', async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const services = mockServices({
+      act: (_actions, _context, signal) => {
+        capturedSignal = signal;
+        // eslint-disable-next-line @typescript-eslint/no-empty-function -- deliberately never resolves
+        return new Promise(() => {});
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
+    actor.start();
+
+    await waitFor(actor, (s) => s.value === 'acting', { timeout: WAIT_TIMEOUT });
+    expect(capturedSignal?.aborted).toBe(false);
+
+    actor.send({ type: 'STOP' });
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('stopped');
+    expect(capturedSignal?.aborted).toBe(true);
+  });
+
+  it('halts within one step when STOP arrives during a slow perceive call', async () => {
+    const services = mockServices({
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- deliberately never resolves
+      perceive: () => new Promise(() => {}),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
+    actor.start();
+
+    await waitFor(actor, (s) => s.value === 'perceiving', { timeout: WAIT_TIMEOUT });
+    actor.send({ type: 'STOP' });
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('stopped');
+  });
+
+  it('produces a graceful termination summary from a real actor snapshot', async () => {
+    const machine = createAgentLoopMachine(mockServices(), testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
+    actor.start();
+
+    await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+    const summary = summarizeLoopRun(actor.getSnapshot());
+
+    expect(summary.outcome).toBe('done');
+    expect(summary.task).toBe('Buy milk');
+    expect(summary.stepCount).toBe(1);
+    expect(summary.subGoalHistory).toEqual(['do the thing']);
   });
 });

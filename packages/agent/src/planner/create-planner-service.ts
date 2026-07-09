@@ -22,7 +22,7 @@ export function createPlannerService(
   modelRouter: ModelRouter,
   options: CreatePlannerServiceOptions = {},
 ): PlannerService {
-  return async (input: PlanInput) => {
+  return async (input: PlanInput, signal?: AbortSignal) => {
     const providerResult = modelRouter.resolve('planner');
     if (isErr(providerResult)) {
       return err(
@@ -38,6 +38,7 @@ export function createPlannerService(
     );
     const result = await generateStructured(providerResult.value, PlannerOutputSchema, prompt, {
       system: PLANNER_SYSTEM_PROMPT,
+      ...(signal !== undefined ? { signal } : {}),
       ...options.generateStructuredOptions,
     });
     if (isErr(result)) {

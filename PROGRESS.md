@@ -40,7 +40,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #16 Planner agent — blocked by: #15, #5, #6, #10
 - [x] #17 Navigator agent — blocked by: #15, #5, #6, #10, #12
 - [x] #18 Verifier — blocked by: #15, #10
-- [ ] #19 Loop guardrails & controls — blocked by: #15, #14
+- [x] #19 Loop guardrails & controls — blocked by: #15, #14
 
 ### M5 — Security core
 
@@ -90,6 +90,9 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [0007](docs/adr/0007-verifier-outcome-and-replanning.md) — Verifier outcome is
   three-way (`achieved`/`continue`/`failed`), with a new `Verifying -> Replanning` edge
   for `failed`; heuristic-first (any action failure ⇒ `failed`, no model call needed).
+- [0008](docs/adr/0008-loop-guardrails.md) — Step/replan budgets enforced via dedicated
+  `always`-only gate states; every service takes a trailing `signal?: AbortSignal` so
+  `STOP` cancels in-flight work, not just the state transition (already immediate).
 
 ## Notes
 
