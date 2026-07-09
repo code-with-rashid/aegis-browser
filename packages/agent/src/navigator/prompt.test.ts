@@ -41,8 +41,8 @@ describe('buildNavigatorPrompt', () => {
     const input: DecideInput = { subGoal: 'Submit the form', perception: perceptionFixture('') };
     const prompt = buildNavigatorPrompt(input);
 
-    expect(prompt).toContain('[ax:1] button "Submit"');
-    expect(prompt).toContain('[ax:2] textbox "Email" value="a@b.com"');
+    expect(prompt).toContain('ref="ax:1" role="button" name="Submit"');
+    expect(prompt).toContain('ref="ax:2" role="textbox" name="Email" value="a@b.com"');
   });
 
   it('says "(none)" when there are no perceived elements', () => {

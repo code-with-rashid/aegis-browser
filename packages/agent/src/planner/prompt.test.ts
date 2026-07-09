@@ -56,7 +56,7 @@ describe('buildPlannerPrompt', () => {
 
     expect(prompt).toContain('<untrusted-page-content>');
     expect(prompt).toContain('</untrusted-page-content>');
-    expect(prompt).toContain('[ax:1] button "Submit"');
+    expect(prompt).toContain('ref="ax:1" role="button" name="Submit"');
     expect(prompt).toContain('Product page for Oat Milk');
   });
 

@@ -184,6 +184,13 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   `docs/DESIGN.md` polished (not rewritten) to fix genuinely stale bits; root `README.md`
   fully rewritten with install/BYOK/usage instructions cross-checked against the actual
   rendered UI text, not written from memory.
+- [0024](docs/adr/0024-unambiguous-element-ref-format.md) — Unambiguous element-ref
+  prompt format (post-v0.1.0, issue #71): the first live-model eval run (real
+  `gpt-4o-mini`) surfaced a real bug — the `[el:3]`-bracketed ref format in the Navigator/
+  Planner prompts caused the model to hallucinate refs by copying the brackets. Changed to
+  labeled, quoted `ref="el:3" role="..." name="..."` fields with no ambiguous delimiter;
+  verified against the real model via a logging proxy — 0 ref-hallucination corrections
+  across a re-run that previously hit dozens.
 
 ## Notes
 
@@ -191,3 +198,5 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - Phase B (build loop, issues #1-#35) completed 2026-07-09 — all 35 issues implemented,
   gated, and merged.
 - Phase C (finalize + tag v0.1.0): see `CHANGELOG.md` and the `v0.1.0` tag.
+- Post-release: issue #71 (unambiguous element-ref format) found via the first real-model
+  live-mode eval run — see ADR 0024.
