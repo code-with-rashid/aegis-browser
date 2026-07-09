@@ -45,7 +45,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M5 — Security core
 
 - [x] #20 Trust-tagging & sanitizer — blocked by: #3
-- [ ] #21 Security policy engine — blocked by: #12, #3
+- [x] #21 Security policy engine — blocked by: #12, #3
 - [ ] #22 Confirmation gate — blocked by: #21, #15
 - [ ] #23 Alignment critic — blocked by: #21, #5
 - [ ] #24 Secret vault & native fill — blocked by: #3, #13
@@ -93,6 +93,10 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [0008](docs/adr/0008-loop-guardrails.md) — Step/replan budgets enforced via dedicated
   `always`-only gate states; every service takes a trailing `signal?: AbortSignal` so
   `STOP` cancels in-flight work, not just the state transition (already immediate).
+- [0009](docs/adr/0009-policy-decision-matrix.md) — Policy engine's risk x mode decision
+  matrix: deny-list wins unless a stored policy is explicitly `mode: "allow"`;
+  `state_changing` risk only skips confirmation when `mode: "allow"` AND
+  `allowStateChanging: true` both hold.
 
 ## Notes
 

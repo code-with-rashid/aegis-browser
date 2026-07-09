@@ -14,7 +14,8 @@
   "dependencies": {
     "@aegis/actions": "workspace:*",
     "@aegis/llm": "workspace:*",
-    "@aegis/shared": "workspace:*"
+    "@aegis/shared": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.10",

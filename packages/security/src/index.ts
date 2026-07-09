@@ -5,3 +5,18 @@ export { neutralizeInstructions } from './sanitize/neutralize-instructions';
 export { sanitizePageContent } from './sanitize/sanitize-page-content';
 export { wrapUntrustedContent } from './sanitize/wrap-untrusted-content';
 export { TRUST_BOUNDARY_SYSTEM_CONTRACT } from './sanitize/system-contract';
+
+export type { PolicyMode, SitePolicy, SitePolicyMap } from './policy/site-policy';
+export {
+  PolicyModeSchema,
+  SitePolicySchema,
+  SitePolicyMapSchema,
+  isPolicyExpired,
+} from './policy/site-policy';
+export { DEFAULT_DENY_LIST_HOST_SUFFIXES, isDenyListedOrigin } from './policy/deny-list';
+export type { PolicyDecision, EvaluatePolicyInput } from './policy/evaluate-policy';
+export { evaluatePolicy, decideForRisk, resolveEffectiveMode } from './policy/evaluate-policy';
+export type { PolicyStore } from './policy/policy-store';
+export { createPolicyStore } from './policy/policy-store';
+export type { PolicyEngine } from './policy/policy-engine';
+export { createPolicyEngine } from './policy/policy-engine';
