@@ -42,7 +42,7 @@ jobs:
         run: pnpm build
 
   e2e:
-    name: e2e (read-only use cases)
+    name: e2e & reliability eval
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -71,3 +71,6 @@ jobs:
 
       - name: Run E2E (headed, via Xvfb)
         run: xvfb-run --auto-servernum -- pnpm --filter @aegis/extension e2e
+
+      - name: Run reliability eval (mock mode, headed via Xvfb)
+        run: xvfb-run --auto-servernum -- pnpm --filter @aegis/evals eval

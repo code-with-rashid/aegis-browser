@@ -3,6 +3,8 @@ import { findRef } from '../find-ref';
 
 export const FORM_FILL_CONFIRMATION_TASK = 'Buy the Widget for $25.00 by clicking Buy Now.';
 
+export const FORM_FILL_CONFIRMATION_FIXTURE = 'checkout.html';
+
 /**
  * Scripted sequence for `checkout.html`: the Navigator proposes a `click` on "Buy Now" —
  * its accessible name matches `STATE_CHANGING_KEYWORDS` ("buy"), so the real policy

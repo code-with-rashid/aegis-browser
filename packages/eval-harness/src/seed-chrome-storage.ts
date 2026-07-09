@@ -1,4 +1,4 @@
-import type { Worker } from '@playwright/test';
+import type { Worker } from 'playwright';
 
 const MODEL_ROUTING_STORAGE_KEY = 'model-routing-config';
 

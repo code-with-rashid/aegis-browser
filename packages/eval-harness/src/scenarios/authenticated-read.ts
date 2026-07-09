@@ -6,6 +6,8 @@ export const AUTHENTICATED_READ_TASK =
 
 export const AUTHENTICATED_READ_EXPECTED_SUMMARY = 'vault opens at midnight';
 
+export const AUTHENTICATED_READ_FIXTURE = 'gated.html';
+
 /**
  * Scripted sequence for `gated.html`: type the access code and click Enter (two actions
  * in one Navigator call), which reveals the protected content client-side; the next
@@ -13,7 +15,7 @@ export const AUTHENTICATED_READ_EXPECTED_SUMMARY = 'vault opens at midnight';
  *
  * Deliberately named "access code" / "Enter" rather than "password" / "submit" — real
  * classifier keywords (`STATE_CHANGING_KEYWORDS`) that would elevate an action's risk to
- * `state_changing` and require human confirmation, out of scope for a read-only E2E case
+ * `state_changing` and require human confirmation, out of scope for a read-only case
  * (that's #32).
  */
 export function createAuthenticatedReadResponder(): FakeModelResponder {

@@ -1,24 +1,28 @@
-import { expect, test } from '@playwright/test';
-
-import { launchExtension } from './extension-context';
-import { startFakeModelServer } from './fake-model-server';
-import { seedModelRoutingConfig } from './seed-storage';
 import {
   AUTHENTICATED_READ_EXPECTED_SUMMARY,
+  AUTHENTICATED_READ_FIXTURE,
   AUTHENTICATED_READ_TASK,
-  createAuthenticatedReadResponder,
-} from './scenarios/authenticated-read';
-import {
   COMPARE_AND_SUMMARIZE_EXPECTED_SUMMARY,
+  COMPARE_AND_SUMMARIZE_FIXTURE,
   COMPARE_AND_SUMMARIZE_TASK,
+  createAuthenticatedReadResponder,
   createCompareAndSummarizeResponder,
-} from './scenarios/compare-and-summarize';
-import {
   createResearchAndExtractResponder,
+  FIXTURES_DIR,
+  launchExtension,
   RESEARCH_AND_EXTRACT_EXPECTED_SUMMARY,
+  RESEARCH_AND_EXTRACT_FIXTURE,
   RESEARCH_AND_EXTRACT_TASK,
-} from './scenarios/research-and-extract';
-import { startStaticServer } from './static-server';
+  seedModelRoutingConfig,
+  startFakeModelServer,
+  startStaticServer,
+} from '@aegis/eval-harness';
+import { expect, test } from '@playwright/test';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const EXTENSION_PATH = path.resolve(HERE, '../.output/chrome-mv3');
 
 /**
  * Proves the core read-only agent loop end-to-end (#31): the real built extension,
@@ -31,26 +35,28 @@ import { startStaticServer } from './static-server';
  * Every scenario here only ever proposes `read`/`input`-risk actions (extract/click/
  * input_text with names that don't trip `STATE_CHANGING_KEYWORDS`), so the policy engine
  * always resolves `allow` and the confirmation gate never engages — genuinely read-only,
- * matching this issue's scope (a confirmation-gated task is #32).
+ * matching this issue's scope (a confirmation-gated task is #32). The fixtures/scenarios
+ * themselves live in `@aegis/eval-harness`, shared with `evals/`'s reliability runner
+ * (#33) so both consume the exact same versioned task set.
  */
 const SCENARIOS = [
   {
     name: 'research & extract',
-    fixture: 'research.html',
+    fixture: RESEARCH_AND_EXTRACT_FIXTURE,
     task: RESEARCH_AND_EXTRACT_TASK,
     expectedSummary: RESEARCH_AND_EXTRACT_EXPECTED_SUMMARY,
     createResponder: createResearchAndExtractResponder,
   },
   {
     name: 'compare & summarize',
-    fixture: 'compare.html',
+    fixture: COMPARE_AND_SUMMARIZE_FIXTURE,
     task: COMPARE_AND_SUMMARIZE_TASK,
     expectedSummary: COMPARE_AND_SUMMARIZE_EXPECTED_SUMMARY,
     createResponder: createCompareAndSummarizeResponder,
   },
   {
     name: 'authenticated read',
-    fixture: 'gated.html',
+    fixture: AUTHENTICATED_READ_FIXTURE,
     task: AUTHENTICATED_READ_TASK,
     expectedSummary: AUTHENTICATED_READ_EXPECTED_SUMMARY,
     createResponder: createAuthenticatedReadResponder,
@@ -59,9 +65,9 @@ const SCENARIOS = [
 
 for (const scenario of SCENARIOS) {
   test(scenario.name, async () => {
-    const staticServer = await startStaticServer();
+    const staticServer = await startStaticServer(FIXTURES_DIR);
     const modelServer = await startFakeModelServer(scenario.createResponder());
-    const extension = await launchExtension();
+    const extension = await launchExtension(EXTENSION_PATH);
 
     try {
       await seedModelRoutingConfig(extension.serviceWorker, modelServer.baseUrl);
