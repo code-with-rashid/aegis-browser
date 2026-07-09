@@ -20,9 +20,12 @@ function summarizeElements(perception: PlanInput['perception']): string | undefi
   if (perception === undefined || perception.elements.length === 0) {
     return undefined;
   }
+  // Matches navigator/prompt.ts's `ref="..."` format (docs/adr/0024) — the Planner
+  // doesn't emit refs itself, but keeping the same vocabulary across roles avoids any
+  // inconsistency in how element identity is described in its own reasoning/plan text.
   return perception.elements
     .slice(0, MAX_SUMMARIZED_ELEMENTS)
-    .map((element) => `- [${element.ref}] ${element.role} "${element.name}"`)
+    .map((element) => `- ref="${element.ref}" role="${element.role}" name="${element.name}"`)
     .join('\n');
 }
 

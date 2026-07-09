@@ -6,9 +6,9 @@ const PROMPT = [
   'Sub-goal: Click the button',
   '',
   'Available elements (use these refs verbatim):',
-  '- [ax:1] button "Reveal Plan B price"',
-  '- [ax:2] textbox "Access code"',
-  '- [ax:3] button "Enter"',
+  '- ref="ax:1" role="button" name="Reveal Plan B price"',
+  '- ref="ax:2" role="textbox" name="Access code"',
+  '- ref="ax:3" role="button" name="Enter"',
 ].join('\n');
 
 describe('findRef', () => {
