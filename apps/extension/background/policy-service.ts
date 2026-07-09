@@ -1,5 +1,6 @@
 import { classifyActionRisk, type Action } from '@aegis/actions';
 import { AgentError, type PolicyCheckOutput, type PolicyService } from '@aegis/agent';
+import type { PerceptionPayload } from '@aegis/perception';
 import type { PolicyDecision, PolicyEngine } from '@aegis/security';
 import { err, isErr, ok } from '@aegis/shared';
 
@@ -20,6 +21,44 @@ function reasonFor(decision: PolicyDecision, action: Action, origin: string): st
   }
 }
 
+/** The ref an action targets, for the action types that have one — `undefined` for the rest. */
+function refOf(action: Action): string | undefined {
+  switch (action.type) {
+    case 'click':
+    case 'input_text':
+    case 'scroll':
+    case 'get_dropdown_options':
+    case 'select_dropdown_option':
+    case 'send_keys':
+      return action.ref;
+    case 'navigate':
+    case 'go_back':
+    case 'open_tab':
+    case 'switch_tab':
+    case 'close_tab':
+    case 'wait':
+    case 'extract':
+    case 'done':
+      return undefined;
+  }
+}
+
+/**
+ * The accessible name of `action`'s target element, if it has one and `perception`
+ * still has it listed — feeds `ActionRiskContext.elementName`, the signal that elevates
+ * an ordinary interaction to `state_changing` (e.g. a button literally named "Buy Now").
+ */
+function elementNameFor(
+  action: Action,
+  perception: PerceptionPayload | undefined,
+): string | undefined {
+  const ref = refOf(action);
+  if (ref === undefined || perception === undefined) {
+    return undefined;
+  }
+  return perception.elements.find((element) => element.ref === ref)?.name;
+}
+
 /**
  * Adapts `@aegis/security`'s `PolicyEngine` (one action at a time, three-way
  * allow/confirm/deny) to `@aegis/agent`'s `PolicyService` port (a batch of actions,
@@ -30,7 +69,10 @@ function reasonFor(decision: PolicyDecision, action: Action, origin: string): st
  * in — a `deny` later in the list must still block the whole batch.
  *
  * `getOrigin` is resolved fresh on every check (not cached) since a `navigate` action
- * earlier in the same run can change the page's origin mid-task.
+ * earlier in the same run can change the page's origin mid-task. Each action's target
+ * element name (from `input.perception`, when present) is resolved into an
+ * `ActionRiskContext` and passed to `engine.evaluate` — without this, the policy
+ * engine's `STATE_CHANGING_KEYWORDS` risk elevation could never actually trigger.
  */
 export function createPolicyService(
   engine: PolicyEngine,
@@ -51,7 +93,12 @@ export function createPolicyService(
     let strictest: { decision: PolicyDecision; action: Action } | undefined;
 
     for (const action of input.actions) {
-      const result = await engine.evaluate(action, origin);
+      const elementName = elementNameFor(action, input.perception);
+      const result = await engine.evaluate(
+        action,
+        origin,
+        elementName !== undefined ? { elementName } : undefined,
+      );
       if (isErr(result)) {
         return err(
           new AgentError('POLICY_CHECK_FAILED', 'Policy engine failed to evaluate an action', {

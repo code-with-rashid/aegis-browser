@@ -62,7 +62,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M7 — Integration, evals, release
 
 - [x] #31 E2E: read-only use cases — blocked by: #16, #17, #18, #19, #26
-- [ ] #32 E2E: confirmation-gated task — blocked by: #27, #22, #23
+- [x] #32 E2E: confirmation-gated task — blocked by: #27, #22, #23
 - [ ] #33 Reliability eval harness — blocked by: #31
 - [ ] #34 Security test suite — blocked by: #20, #22, #23, #32
 - [ ] #35 Cross-browser build, docs & v0.1.0 — blocked by: all prior issues
@@ -149,6 +149,15 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   elevation never actually triggers in the real running system — left for #32 to close,
   since that issue is about the confirmation gate and a confirmation-gated E2E case would
   otherwise never confirm.
+- [0020](docs/adr/0020-e2e-confirmation-gated-task.md) — E2E confirmation-gated task:
+  closed the #31-discovered gap first — `PolicyCheckInput` gained an optional
+  `perception`, threaded through `policyCheck`'s invoke input, and
+  `background/policy-service.ts` now resolves each action's target element name and passes
+  it as `ActionRiskContext` to `PolicyEngine.evaluate`, so a "Buy Now" click genuinely
+  elevates to `state_changing` and requires confirmation. The E2E scenario scripts the
+  Critic `aligned: true` (this issue tests the human gate, not alignment) and asserts the
+  fixture's own DOM state (`#purchased` stays hidden) both mid-confirmation and after
+  reject, not just the loop's self-reported status.
 
 ## Notes
 

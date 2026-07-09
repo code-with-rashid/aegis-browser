@@ -1,4 +1,5 @@
 import { AgentError } from '@aegis/agent';
+import type { PerceptionPayload } from '@aegis/perception';
 import {
   createPolicyEngine,
   createPolicyStore,
@@ -6,12 +7,21 @@ import {
   type PolicyEngine,
 } from '@aegis/security';
 import { createMemoryStorage, err, ok, StorageError, toElementRef } from '@aegis/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createPolicyService } from './policy-service';
 
 const click = { type: 'click' as const, ref: toElementRef('e1') };
 const goBack = { type: 'go_back' as const };
+
+function perceptionWithElement(name: string): PerceptionPayload {
+  return {
+    elements: [{ ref: toElementRef('e1'), role: 'button', name, state: {}, source: 'ax' }],
+    content: { text: '', truncated: false },
+    tokenEstimate: 0,
+    truncated: false,
+  };
+}
 
 function fakeEngine(decisionFor: (index: number) => PolicyDecision): PolicyEngine {
   let calls = 0;
@@ -118,6 +128,66 @@ describe('createPolicyService', () => {
     const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
 
     const result = await checkPolicy({ actions: [goBack] });
+
+    expect(result).toEqual({ ok: true, value: { decision: 'allow' } });
+  });
+
+  it('passes the target element accessible name from perception as riskContext', async () => {
+    const evaluate = vi.fn().mockResolvedValue(ok('allow'));
+    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+
+    await checkPolicy({ actions: [click], perception: perceptionWithElement('Buy Now') });
+
+    expect(evaluate).toHaveBeenCalledWith(click, 'https://example.com', {
+      elementName: 'Buy Now',
+    });
+  });
+
+  it('passes no riskContext when no perception is given', async () => {
+    const evaluate = vi.fn().mockResolvedValue(ok('allow'));
+    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+
+    await checkPolicy({ actions: [click] });
+
+    expect(evaluate).toHaveBeenCalledWith(click, 'https://example.com', undefined);
+  });
+
+  it('passes no riskContext when perception has no element matching the ref', async () => {
+    const evaluate = vi.fn().mockResolvedValue(ok('allow'));
+    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+    const perception: PerceptionPayload = {
+      elements: [],
+      content: { text: '', truncated: false },
+      tokenEstimate: 0,
+      truncated: false,
+    };
+
+    await checkPolicy({ actions: [click], perception });
+
+    expect(evaluate).toHaveBeenCalledWith(click, 'https://example.com', undefined);
+  });
+
+  it('integrates with a real PolicyEngine: a click on a button named "Buy Now" requires confirmation', async () => {
+    const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+
+    const result = await checkPolicy({
+      actions: [click],
+      perception: perceptionWithElement('Buy Now'),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.decision).toBe('confirm');
+  });
+
+  it('integrates with a real PolicyEngine: the same click on a button named "Details" is allowed', async () => {
+    const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+
+    const result = await checkPolicy({
+      actions: [click],
+      perception: perceptionWithElement('Details'),
+    });
 
     expect(result).toEqual({ ok: true, value: { decision: 'allow' } });
   });
