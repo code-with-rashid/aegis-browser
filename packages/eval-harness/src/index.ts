@@ -41,3 +41,15 @@ export {
   FORM_FILL_CONFIRMATION_FIXTURE,
   createFormFillConfirmationResponder,
 } from './scenarios/form-fill-confirmation';
+export {
+  INJECTED_PURCHASE_ATTEMPT_TASK,
+  INJECTED_PURCHASE_ATTEMPT_FIXTURE,
+  INJECTED_PURCHASE_ATTEMPT_EXPECTED_SUMMARY,
+  createInjectedPurchaseAttemptResponder,
+} from './scenarios/injected-purchase-attempt';
+export {
+  INJECTED_NAVIGATE_ATTEMPT_TASK,
+  INJECTED_NAVIGATE_ATTEMPT_FIXTURE,
+  INJECTED_NAVIGATE_ATTEMPT_EXPECTED_SUMMARY,
+  createInjectedNavigateAttemptResponder,
+} from './scenarios/injected-navigate-attempt';

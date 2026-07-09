@@ -59,6 +59,50 @@ function elementNameFor(
   return perception.elements.find((element) => element.ref === ref)?.name;
 }
 
+/** The URL an action would navigate the browser to, for the action types that have one. */
+function destinationUrlFor(action: Action): string | undefined {
+  switch (action.type) {
+    case 'navigate':
+      return action.url;
+    case 'open_tab':
+      return action.url;
+    case 'click':
+    case 'input_text':
+    case 'scroll':
+    case 'go_back':
+    case 'switch_tab':
+    case 'close_tab':
+    case 'get_dropdown_options':
+    case 'select_dropdown_option':
+    case 'send_keys':
+    case 'wait':
+    case 'extract':
+    case 'done':
+      return undefined;
+  }
+}
+
+/**
+ * The origin to policy-check `action` against: for `navigate`/`open_tab` (an action that
+ * takes the browser somewhere new), that's the *destination*'s origin — a deny-listed
+ * origin must be unreachable by navigating there, not just unreachable-to-act-on once
+ * already on it, otherwise an injected "navigate to chase.com" instruction would sail
+ * through a policy check that only ever inspected the page the agent started on. Every
+ * other action type is checked against `currentOrigin`, since those act on the page the
+ * agent is already on.
+ */
+function originToCheck(action: Action, currentOrigin: string): string {
+  const destinationUrl = destinationUrlFor(action);
+  if (destinationUrl === undefined) {
+    return currentOrigin;
+  }
+  try {
+    return new URL(destinationUrl).origin;
+  } catch {
+    return currentOrigin;
+  }
+}
+
 /**
  * Adapts `@aegis/security`'s `PolicyEngine` (one action at a time, three-way
  * allow/confirm/deny) to `@aegis/agent`'s `PolicyService` port (a batch of actions,
@@ -72,16 +116,18 @@ function elementNameFor(
  * earlier in the same run can change the page's origin mid-task. Each action's target
  * element name (from `input.perception`, when present) is resolved into an
  * `ActionRiskContext` and passed to `engine.evaluate` — without this, the policy
- * engine's `STATE_CHANGING_KEYWORDS` risk elevation could never actually trigger.
+ * engine's `STATE_CHANGING_KEYWORDS` risk elevation could never actually trigger. A
+ * `navigate`/`open_tab` action is checked against its *destination* origin, not the
+ * current page's — see {@link originToCheck}.
  */
 export function createPolicyService(
   engine: PolicyEngine,
   getOrigin: () => Promise<string>,
 ): PolicyService {
   return async (input) => {
-    let origin: string;
+    let currentOrigin: string;
     try {
-      origin = await getOrigin();
+      currentOrigin = await getOrigin();
     } catch (cause) {
       return err(
         new AgentError('POLICY_CHECK_FAILED', 'Could not resolve the current page origin', {
@@ -90,13 +136,14 @@ export function createPolicyService(
       );
     }
 
-    let strictest: { decision: PolicyDecision; action: Action } | undefined;
+    let strictest: { decision: PolicyDecision; action: Action; checkedOrigin: string } | undefined;
 
     for (const action of input.actions) {
       const elementName = elementNameFor(action, input.perception);
+      const checkedOrigin = originToCheck(action, currentOrigin);
       const result = await engine.evaluate(
         action,
-        origin,
+        checkedOrigin,
         elementName !== undefined ? { elementName } : undefined,
       );
       if (isErr(result)) {
@@ -111,7 +158,7 @@ export function createPolicyService(
         strictest === undefined ||
         DECISION_PRIORITY[result.value] > DECISION_PRIORITY[strictest.decision]
       ) {
-        strictest = { decision: result.value, action };
+        strictest = { decision: result.value, action, checkedOrigin };
       }
     }
 
@@ -120,7 +167,7 @@ export function createPolicyService(
       return ok(output);
     }
 
-    const reason = reasonFor(strictest.decision, strictest.action, origin);
+    const reason = reasonFor(strictest.decision, strictest.action, strictest.checkedOrigin);
     const output: PolicyCheckOutput = {
       decision: strictest.decision,
       ...(reason !== undefined ? { reason } : {}),

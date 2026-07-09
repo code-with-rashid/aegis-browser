@@ -191,4 +191,59 @@ describe('createPolicyService', () => {
 
     expect(result).toEqual({ ok: true, value: { decision: 'allow' } });
   });
+
+  it('checks a navigate action against its destination origin, not the current page', async () => {
+    const evaluate = vi.fn().mockResolvedValue(ok('allow'));
+    const navigate = { type: 'navigate' as const, url: 'https://www.chase.com/login' };
+    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+
+    await checkPolicy({ actions: [navigate] });
+
+    expect(evaluate).toHaveBeenCalledWith(navigate, 'https://www.chase.com', undefined);
+  });
+
+  it('integrates with a real PolicyEngine: navigating to a deny-listed destination is denied, even from a safe origin', async () => {
+    const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
+    const navigate = { type: 'navigate' as const, url: 'https://www.chase.com/login' };
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+
+    const result = await checkPolicy({ actions: [navigate] });
+
+    expect(result).toEqual({
+      ok: true,
+      value: { decision: 'deny', reason: 'https://www.chase.com denies this action' },
+    });
+  });
+
+  it('integrates with a real PolicyEngine: opening a new tab at a deny-listed URL is denied', async () => {
+    const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
+    const openTab = { type: 'open_tab' as const, url: 'https://www.chase.com/login' };
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+
+    const result = await checkPolicy({ actions: [openTab] });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.decision).toBe('deny');
+  });
+
+  it('checks a click action against the current origin, unaffected by the navigate-destination logic', async () => {
+    const evaluate = vi.fn().mockResolvedValue(ok('allow'));
+    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+
+    await checkPolicy({ actions: [click] });
+
+    expect(evaluate).toHaveBeenCalledWith(click, 'https://example.com', undefined);
+  });
+
+  it('falls back to the current origin for a navigate action with an unparseable URL', async () => {
+    // NavigateActionSchema already requires a valid URL, but the fallback must still be
+    // safe (deny nothing spuriously) if one somehow arrives malformed.
+    const evaluate = vi.fn().mockResolvedValue(ok('allow'));
+    const navigate = { type: 'navigate' as const, url: 'not-a-valid-url' };
+    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+
+    await checkPolicy({ actions: [navigate] });
+
+    expect(evaluate).toHaveBeenCalledWith(navigate, 'https://example.com', undefined);
+  });
 });
