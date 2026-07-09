@@ -3,7 +3,23 @@ import type Protocol from 'devtools-protocol/types/protocol';
 import { toElementRef } from '@aegis/shared';
 
 import type { PerceivedElement } from '../ax/perceived-element';
-import { collectText, parseAttributes, tagNameOf, walkElements } from './dom-utils';
+import { children, collectText, ELEMENT_NODE, parseAttributes, tagNameOf } from './dom-utils';
+
+const HIDDEN_STYLE_PATTERN = /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)\s*(?:;|$)/i;
+
+/**
+ * Whether this element itself is hidden — not whether an ancestor is. Callers walk
+ * top-down and skip a hidden node's entire subtree, matching how `display:none` (which
+ * `hidden` maps to via the UA stylesheet) removes descendants from rendering regardless
+ * of their own attributes.
+ */
+function isHidden(attrs: Record<string, string>): boolean {
+  if (attrs['hidden'] !== undefined) {
+    return true;
+  }
+  const style = attrs['style'];
+  return style !== undefined && HIDDEN_STYLE_PATTERN.test(style);
+}
 
 const INTERACTIVE_TAGS = new Set([
   'a',
@@ -83,16 +99,32 @@ function stateFor(attrs: Record<string, string>): Record<string, string | number
   return state;
 }
 
+function walkVisible(node: Protocol.DOM.Node, visit: (element: Protocol.DOM.Node) => void): void {
+  if (node.nodeType === ELEMENT_NODE) {
+    if (isHidden(parseAttributes(node))) {
+      return;
+    }
+    visit(node);
+  }
+  for (const child of children(node)) {
+    walkVisible(child, visit);
+  }
+}
+
 /**
  * Prunes a raw `DOM.getDocument` tree down to interactive elements (links, buttons,
  * form controls, `<option>`s, and anything with an interactive ARIA role or click
  * handler), tagged `source: 'dom'` so they can be merged with AX-sourced
  * {@link PerceivedElement}s in the perception aggregator (#10).
+ *
+ * Skips hidden elements — and their entire subtree — so an element that was hidden by a
+ * prior action (click-to-reveal, submit-to-hide-form) stops being offered as a target
+ * (#73).
  */
 export function pruneInteractiveElements(root: Protocol.DOM.Node): PerceivedElement[] {
   const elements: PerceivedElement[] = [];
 
-  walkElements(root, (node) => {
+  walkVisible(root, (node) => {
     const tag = tagNameOf(node);
     const attrs = parseAttributes(node);
     if (!isInteractive(tag, attrs)) {

@@ -79,4 +79,32 @@ describe('pruneInteractiveElements', () => {
     const [element] = pruneInteractiveElements(button);
     expect(element?.ref).toBe(`dom:${button.backendNodeId}`);
   });
+
+  it('excludes an element with the hidden attribute', () => {
+    const root = el('div', {}, [el('button', { hidden: '' }, [text('Reveal')])]);
+    expect(pruneInteractiveElements(root)).toHaveLength(0);
+  });
+
+  it('excludes an element with an inline display:none style', () => {
+    const root = el('div', {}, [el('button', { style: 'display: none' }, [text('Reveal')])]);
+    expect(pruneInteractiveElements(root)).toHaveLength(0);
+  });
+
+  it('excludes an element with an inline visibility:hidden style', () => {
+    const root = el('div', {}, [el('button', { style: 'visibility: hidden' }, [text('Reveal')])]);
+    expect(pruneInteractiveElements(root)).toHaveLength(0);
+  });
+
+  it('excludes descendants of a hidden container even when they have no hidden attribute of their own', () => {
+    const root = el('div', { id: 'gate', hidden: '' }, [
+      el('input', { id: 'code', type: 'text' }),
+      el('button', { id: 'enter' }, [text('Enter')]),
+    ]);
+    expect(pruneInteractiveElements(root)).toHaveLength(0);
+  });
+
+  it('includes an interactive element that is not hidden', () => {
+    const root = el('div', {}, [el('button', {}, [text('Visible')])]);
+    expect(pruneInteractiveElements(root)).toHaveLength(1);
+  });
 });
