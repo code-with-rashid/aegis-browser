@@ -6,8 +6,8 @@ The WXT (Manifest V3) app. This is the composition root: it wires the domain pac
 
 - `entrypoints/background.ts` — service worker; owns the CDP session and agent loop via
   `background/run-manager.ts`.
-- `entrypoints/sidepanel/` — React side panel (chat input, run controls, live status;
-  trace/confirmation-gate UI are #26/#27).
+- `entrypoints/sidepanel/` — React side panel (chat input, run controls, live status,
+  action trace; confirmation-gate UI is #27).
 - `messaging/` — the typed `chrome.runtime.connect` bridge between them.
 - `background/` — the real, non-mock `LoopServices` composition (see ADR 0013).
 
@@ -41,6 +41,18 @@ Summary:
   new `PolicyEngine`-backed `PolicyService`), not a stub. Starting a run before any
   provider is configured (no options UI exists yet — #28) fails with a real,
   user-surfaced `MODEL_ROUTING_NOT_CONFIGURED` reason.
+
+## Action trace / log UI (#26)
+
+See [ADR 0014](../../docs/adr/0014-action-trace-log-ui.md). `run-manager.ts` watches for
+the `verifying -> (anything else)` transition edge and calls `@aegis/agent`'s
+`buildTraceStep` right then, accumulating a `TraceStep[]` it persists to
+`chrome.storage.session` and broadcasts incrementally: `TRACE_SNAPSHOT` (the full array,
+reset to `[]` on every new `START_RUN`, sent to every port on connect) and `TRACE_STEP`
+(one new entry, as each completes). The Zustand store's `trace` field and
+`entrypoints/sidepanel/trace-list.tsx`'s `TraceList` component don't distinguish "live"
+from "replay" — they just render whatever the array currently holds, whether the run is
+still going or already finished. Each step is expandable to show its raw perception.
 
 ## Commands
 

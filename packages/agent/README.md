@@ -119,6 +119,21 @@ persist → kill → rehydrate → resume round-trip, including mid-`confirming`
 awaiting user approval when the service worker died still asks for it again correctly on
 restart, rather than silently resuming as if approved).
 
+## Trace (for #26's trace UI)
+
+`context.plannerReasoning`/`navigatorReasoning`/`verifierReasoning`/`verifyOutcome`
+(`loop/machine.ts`) hold the _most recent_ Planner/Navigator/Verifier reasoning — captured
+in the same transition actions that already run, not a new machine concept.
+`buildTraceStep(context, stepNumber)` (`loop/trace.ts`) is a pure function turning one
+snapshot's context into a `TraceStep`: it zips `context.proposedActions` (real `Action`s,
+refs included) with `context.lastRunSummary.actions` (success/error info) by index, using
+`describeAction` (from `loop/confirmation.ts`) for each action's human-readable
+description — the same description a confirmation preview would show. Returns `undefined`
+when there's nothing to report yet (`lastRunSummary` unset). See
+`docs/adr/0014-action-trace-log-ui.md`: accumulating a list of these into a persisted,
+broadcastable trace is composition-root work (`apps/extension/background/run-manager.ts`),
+not built here — this package only makes the per-step data available.
+
 ## Sanitization (a placeholder for #20)
 
 `identitySanitize`/`wrapUntrustedContent` (`sanitize.ts`) are the shape the real content

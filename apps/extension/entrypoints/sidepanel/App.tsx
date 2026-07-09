@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 import { useRunStore } from './store';
+import { TraceList } from './trace-list';
 
 async function activeTabId(): Promise<number | undefined> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -27,6 +28,7 @@ export default function App(): React.JSX.Element {
   const taskSummary = useRunStore((s) => s.taskSummary);
   const lastError = useRunStore((s) => s.lastError);
   const startFailedReason = useRunStore((s) => s.startFailedReason);
+  const trace = useRunStore((s) => s.trace);
   const setTask = useRunStore((s) => s.setTask);
   const startRun = useRunStore((s) => s.startRun);
   const stopRun = useRunStore((s) => s.stopRun);
@@ -56,7 +58,7 @@ export default function App(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-full min-h-[400px] w-[360px] flex-col gap-3 bg-background p-4 text-foreground">
+    <div className="flex h-full min-h-[400px] w-[360px] flex-col gap-3 overflow-y-auto bg-background p-4 text-foreground">
       <header className="space-y-1">
         <h1 className="text-lg font-semibold">Aegis</h1>
         <p className="text-sm text-muted-foreground">Local-first, BYOK browser automation.</p>
@@ -127,6 +129,8 @@ export default function App(): React.JSX.Element {
           </p>
         ) : null}
       </div>
+
+      <TraceList steps={trace} />
     </div>
   );
 }

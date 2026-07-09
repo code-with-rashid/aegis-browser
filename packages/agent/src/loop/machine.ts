@@ -18,6 +18,7 @@ import type {
   PolicyCheckInput,
   PolicyCheckOutput,
   VerifyInput,
+  VerifyOutcome,
   VerifyOutput,
 } from './services';
 
@@ -69,6 +70,11 @@ export interface AgentLoopContext {
   readonly pendingConfirmation: ConfirmationRequest | undefined;
   /** The policy engine's reason for requiring confirmation — carried from `policyCheck` through `aligning` into the eventual `pendingConfirmation`. */
   readonly policyCheckReason: string | undefined;
+  /** The most recent Planner/Navigator/Verifier reasoning — surfaced for the trace UI (#26) via `loop/trace.ts`'s `buildTraceStep`. */
+  readonly plannerReasoning: string | undefined;
+  readonly navigatorReasoning: string | undefined;
+  readonly verifierReasoning: string | undefined;
+  readonly verifyOutcome: VerifyOutcome | undefined;
 }
 
 export type AgentLoopEvent =
@@ -140,6 +146,10 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       taskSummary: undefined,
       pendingConfirmation: undefined,
       policyCheckReason: undefined,
+      plannerReasoning: undefined,
+      navigatorReasoning: undefined,
+      verifierReasoning: undefined,
+      verifyOutcome: undefined,
     }),
     initial: 'planning',
     states: {
@@ -177,6 +187,8 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
                   !isErr(event.output)
                     ? [...context.subGoalHistory, event.output.value.subGoal]
                     : context.subGoalHistory,
+                plannerReasoning: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.reasoning : undefined,
               }),
             },
           ],
@@ -253,6 +265,8 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
               actions: assign({
                 proposedActions: ({ event }) =>
                   !isErr(event.output) ? event.output.value.actions : [],
+                navigatorReasoning: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.reasoning : undefined,
               }),
             },
           ],
@@ -496,17 +510,43 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
                 event.output.value.outcome === 'achieved' &&
                 event.output.value.taskComplete,
               target: 'done',
+              actions: assign({
+                verifierReasoning: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.reasoning : undefined,
+                verifyOutcome: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.outcome : undefined,
+              }),
             },
             {
               guard: ({ event }) =>
                 !isErr(event.output) && event.output.value.outcome === 'achieved',
               target: 'planning',
+              actions: assign({
+                verifierReasoning: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.reasoning : undefined,
+                verifyOutcome: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.outcome : undefined,
+              }),
             },
             {
               guard: ({ event }) => !isErr(event.output) && event.output.value.outcome === 'failed',
               target: 'replanning',
+              actions: assign({
+                verifierReasoning: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.reasoning : undefined,
+                verifyOutcome: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.outcome : undefined,
+              }),
             },
-            { target: 'perceiving' },
+            {
+              target: 'perceiving',
+              actions: assign({
+                verifierReasoning: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.reasoning : undefined,
+                verifyOutcome: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.outcome : undefined,
+              }),
+            },
           ],
           onError: {
             target: 'failed',

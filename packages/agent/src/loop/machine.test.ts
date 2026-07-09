@@ -56,6 +56,37 @@ describe('agent loop machine', () => {
     expect(snapshot.context.taskSummary).toBeUndefined();
   });
 
+  it('captures planner/navigator/verifier reasoning and the verify outcome on context, for the trace UI (#26)', async () => {
+    const services = mockServices({
+      plan: () =>
+        Promise.resolve(
+          ok({ subGoal: 'find the item', taskComplete: false, reasoning: 'user wants oat milk' }),
+        ),
+      decide: () =>
+        Promise.resolve(
+          ok({
+            actions: [{ type: 'click', ref: toElementRef('ax:1') }],
+            stuck: false,
+            reasoning: 'clicking the search result',
+          }),
+        ),
+      verify: () =>
+        Promise.resolve(
+          ok({ outcome: 'achieved', taskComplete: true, reasoning: 'cart now shows the item' }),
+        ),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.context.plannerReasoning).toBe('user wants oat milk');
+    expect(snapshot.context.navigatorReasoning).toBe('clicking the search result');
+    expect(snapshot.context.verifierReasoning).toBe('cart now shows the item');
+    expect(snapshot.context.verifyOutcome).toBe('achieved');
+  });
+
   it('finishes immediately when the planner reports the task already complete', async () => {
     const services = mockServices({
       plan: () =>

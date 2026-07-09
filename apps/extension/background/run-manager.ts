@@ -1,4 +1,5 @@
 import {
+  buildTraceStep,
   clearAgentLoopSnapshot,
   createAgentLoopMachine,
   hydrateAgentLoopSnapshot,
@@ -9,9 +10,11 @@ import {
   summarizeLoopRun,
   type AgentLoopContext,
   type AgentLoopEvent,
+  type TraceStep,
 } from '@aegis/agent';
 import type { StoragePort } from '@aegis/shared';
 import { createActor, type Snapshot } from 'xstate';
+import { z } from 'zod';
 
 import type { MessagePort } from '../messaging/port';
 import type { BackgroundToPanelMessage, PanelToBackgroundMessage } from '../messaging/protocol';
@@ -46,12 +49,17 @@ function isRunOngoing(snapshot: {
   return !TERMINAL_OUTCOMES.has(summarizeLoopRun(snapshot).outcome);
 }
 
+const TRACE_STORAGE_KEY = 'agent-loop-trace';
+/** Our own serialized data, round-tripped through the same process — trusted, not validated at this internal boundary. */
+const TraceStepsSchema = z.array(z.unknown());
+
 /**
  * Owns the single active agent-loop run (one task at a time, matching the side panel
  * being one surface per window) and bridges its lifecycle to every connected panel port:
  * broadcasts a `RUN_STATUS`/`RUN_IDLE` on every transition, persists the snapshot after
  * every transition (`docs/DESIGN.md` §4 — MV3 workers can be evicted), and detaches the
- * live CDP session once the run reaches a terminal state.
+ * live CDP session once the run reaches a terminal state. Also accumulates the run's
+ * trace (`docs/adr/0014-action-trace-log-ui.md`) and broadcasts it incrementally.
  */
 export interface RunManager {
   registerPort(port: BackgroundPort): void;
@@ -69,6 +77,7 @@ export function createRunManager(
   const ports = new Set<BackgroundPort>();
   let activeActor: LoopActorHandle | undefined;
   let stopPersisting: (() => void) | undefined;
+  let trace: TraceStep[] = [];
 
   function broadcast(message: BackgroundToPanelMessage): void {
     for (const port of ports) {
@@ -83,13 +92,35 @@ export function createRunManager(
     return { type: 'RUN_STATUS', summary: summarizeLoopRun(activeActor.getSnapshot()) };
   }
 
+  async function persistTrace(): Promise<void> {
+    await sessionStorage.set(TraceStepsSchema, TRACE_STORAGE_KEY, trace);
+  }
+
+  async function loadPersistedTrace(): Promise<TraceStep[]> {
+    const result = await sessionStorage.get(TraceStepsSchema, TRACE_STORAGE_KEY);
+    return result.ok && result.value !== undefined ? (result.value as TraceStep[]) : [];
+  }
+
   function attachLifecycle(actor: LoopActorHandle, detach: () => Promise<unknown>): void {
     stopPersisting?.();
     stopPersisting = persistAgentLoopOnTransition(actor, sessionStorage);
 
+    let previousValue: unknown = actor.getSnapshot().value;
+
     actor.subscribe(() => {
       const snapshot = actor.getSnapshot();
       broadcast({ type: 'RUN_STATUS', summary: summarizeLoopRun(snapshot) });
+
+      if (previousValue === 'verifying' && snapshot.value !== 'verifying') {
+        const step = buildTraceStep(snapshot.context, trace.length + 1);
+        if (step !== undefined) {
+          trace.push(step);
+          void persistTrace();
+          broadcast({ type: 'TRACE_STEP', step });
+        }
+      }
+      previousValue = snapshot.value;
+
       if (!isRunOngoing(snapshot)) {
         stopPersisting?.();
         stopPersisting = undefined;
@@ -122,6 +153,10 @@ export function createRunManager(
       return;
     }
 
+    trace = [];
+    await persistTrace();
+    broadcast({ type: 'TRACE_SNAPSHOT', steps: [...trace] });
+
     const machine = createAgentLoopMachine(built.services, built.executorContext);
     const actor = createActor(machine, { input: { task, tabId } });
     activeActor = actor;
@@ -133,6 +168,7 @@ export function createRunManager(
     registerPort(port) {
       ports.add(port);
       port.send(currentStatusMessage());
+      port.send({ type: 'TRACE_SNAPSHOT', steps: [...trace] });
 
       port.onMessage((message) => {
         switch (message.type) {
@@ -165,6 +201,8 @@ export function createRunManager(
     },
 
     async initialize() {
+      trace = await loadPersistedTrace();
+
       const hydrateResult = await hydrateAgentLoopSnapshot(sessionStorage);
       if (!hydrateResult.ok || hydrateResult.value === undefined) {
         return;

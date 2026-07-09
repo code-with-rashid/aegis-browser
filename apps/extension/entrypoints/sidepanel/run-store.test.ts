@@ -1,3 +1,4 @@
+import type { TraceStep } from '@aegis/agent';
 import { describe, expect, it } from 'vitest';
 
 import { createFakePortPair } from '../../messaging/fake-port';
@@ -6,6 +7,20 @@ import { createRunStore } from './run-store';
 
 function panelAndBackgroundPorts() {
   return createFakePortPair<PanelToBackgroundMessage, BackgroundToPanelMessage>();
+}
+
+function traceStepFixture(overrides: Partial<TraceStep> = {}): TraceStep {
+  return {
+    stepNumber: 1,
+    subGoal: 'Add to cart',
+    plannerReasoning: 'user wants oat milk',
+    navigatorReasoning: 'clicking add to cart',
+    actions: [{ description: 'Click "Add to cart"', succeeded: true, errorMessage: undefined }],
+    verifyOutcome: 'achieved',
+    verifierReasoning: 'cart now shows the item',
+    perception: undefined,
+    ...overrides,
+  };
 }
 
 describe('createRunStore', () => {
@@ -143,5 +158,44 @@ describe('createRunStore', () => {
     });
 
     expect(store.getState().startFailedReason).toBeUndefined();
+  });
+
+  it('starts with an empty trace', () => {
+    const { a: panelPort } = panelAndBackgroundPorts();
+    const store = createRunStore(panelPort);
+    expect(store.getState().trace).toEqual([]);
+  });
+
+  it('a TRACE_SNAPSHOT replaces the trace wholesale', () => {
+    const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+    const store = createRunStore(panelPort);
+    const steps = [traceStepFixture({ stepNumber: 1 }), traceStepFixture({ stepNumber: 2 })];
+
+    backgroundPort.send({ type: 'TRACE_SNAPSHOT', steps });
+
+    expect(store.getState().trace).toEqual(steps);
+  });
+
+  it('a TRACE_STEP appends to the existing trace', () => {
+    const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+    const store = createRunStore(panelPort);
+
+    backgroundPort.send({ type: 'TRACE_SNAPSHOT', steps: [traceStepFixture({ stepNumber: 1 })] });
+    backgroundPort.send({ type: 'TRACE_STEP', step: traceStepFixture({ stepNumber: 2 }) });
+
+    expect(store.getState().trace).toEqual([
+      traceStepFixture({ stepNumber: 1 }),
+      traceStepFixture({ stepNumber: 2 }),
+    ]);
+  });
+
+  it('a RUN_IDLE message clears the trace too', () => {
+    const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+    const store = createRunStore(panelPort);
+
+    backgroundPort.send({ type: 'TRACE_STEP', step: traceStepFixture() });
+    backgroundPort.send({ type: 'RUN_IDLE' });
+
+    expect(store.getState().trace).toEqual([]);
   });
 });
