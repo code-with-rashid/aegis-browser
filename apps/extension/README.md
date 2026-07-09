@@ -114,6 +114,24 @@ its `StoragePort` as a prop) and "Permissions" (`permissions-panel.tsx`).
   edits here take effect on the very next policy check `background/policy-service.ts`
   makes — no extra wiring needed to satisfy "edits change gate behavior at runtime."
 
+## Options — secret vault UI (#30)
+
+See [ADR 0018](../../docs/adr/0018-options-secret-vault-ui.md). A third options tab,
+"Secrets" (`secret-vault-panel.tsx`), takes an injected `@aegis/security` `SecretVault`
+(#24). Locked by default on every page load; unlocking with a passphrase either opens the
+existing vault or bootstraps a new one. Once unlocked: add a named secret (value masked
+behind a Show/Hide toggle, same convention as #28's API key field), remove one, or Lock
+again.
+
+- Each stored secret shows its exact `‹secret:name›` placeholder token (`toSecretPlaceholder`)
+  with a Copy button — the concrete "where used" affordance: that token is what a user
+  types into a task, and it's the only thing the agent ever sees in place of the real
+  value.
+- Secret names are restricted to `[a-zA-Z0-9_-]+` (`secret-name.ts`) so the placeholder
+  token is unambiguous to retype/re-paste — no whitespace or delimiter characters.
+- No "reveal" for an existing secret's value; re-adding an existing name overwrites it
+  (the vault's `setSecret` is already an upsert).
+
 ## Commands
 
 ```bash
