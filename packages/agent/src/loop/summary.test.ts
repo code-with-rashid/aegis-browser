@@ -58,9 +58,14 @@ describe('summarizeLoopRun', () => {
     expect(summary.outcome).toBe('stopped');
   });
 
-  it('reports "active" for any non-terminal state value', () => {
+  it('reports "active" for any other, non-named state value', () => {
     const summary = summarizeLoopRun({ value: 'perceiving', context: contextFixture() });
     expect(summary.outcome).toBe('active');
+  });
+
+  it('reports "paused" distinctly from "active" — a UI needs this to show Resume vs Pause', () => {
+    const summary = summarizeLoopRun({ value: 'paused', context: contextFixture() });
+    expect(summary.outcome).toBe('paused');
   });
 
   it('omits taskSummary/lastError when neither is set', () => {
