@@ -210,6 +210,17 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   what the model intended. Fixed by selecting all existing content before inserting;
   re-verified live — `authenticated-read` now reaches `Done` in ~4-5 steps instead of
   timing out.
+- [0027](docs/adr/0027-navigator-overall-task-context.md) — Give the Navigator the
+  overall task, not just the sub-goal (post-v0.1.0, issue #77): a third, distinct
+  root cause behind `authenticated-read`'s flakiness — the Navigator's prompt only ever
+  saw the Planner's paraphrased sub-goal, never the original task, so when a paraphrase
+  dropped a literal value (e.g. "Access the webpage for the members area" instead of
+  "Enter access code 1234..."), the model had no way to recover the real value and
+  fabricated a placeholder instead (`<access_code>`-style), persistently, for the whole
+  run. Fixed by threading `task` through `DecideInput` into the Navigator's prompt.
+  Re-verified live across many repeated runs — zero timeouts; remaining occasional
+  failures are unrelated to Aegis (free-text summary wording variance, and once an
+  OpenRouter 402 from the test account running low on credits).
 
 ## Notes
 
@@ -223,3 +234,5 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   follow-up live-model eval re-run after #71 — see ADR 0025.
 - Post-release: issue #75 (select existing content before `input_text` inserts) found
   via a follow-up live-model eval re-run after #73 — see ADR 0026.
+- Post-release: issue #77 (Navigator overall-task context) found via repeated
+  follow-up live-model eval re-runs after #75 — see ADR 0027.
