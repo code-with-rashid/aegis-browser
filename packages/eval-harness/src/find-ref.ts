@@ -1,4 +1,4 @@
-const ELEMENT_LINE_PATTERN = /-\s\[([^\]]+)]\s+\w+\s+"([^"]*)"/g;
+const ELEMENT_LINE_PATTERN = /-\s+ref="([^"]+)"\s+role="[^"]*"\s+name="([^"]*)"/g;
 
 /**
  * Finds the `ElementRef` string for the first "Available elements" line (as rendered by
