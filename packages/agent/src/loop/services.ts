@@ -73,6 +73,8 @@ export type NavigatorService = (
 
 export interface PolicyCheckInput {
   readonly actions: readonly Action[];
+  /** The perception the actions were proposed against — lets the policy service resolve each action's target element name for risk elevation (e.g. a button literally named "Buy Now"). Optional so existing callers/tests that don't need it can omit it entirely. */
+  readonly perception?: PerceptionPayload;
 }
 /**
  * `allow`: run the actions unsupervised. `confirm`: suspend the loop and ask the human
