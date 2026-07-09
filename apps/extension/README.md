@@ -171,6 +171,25 @@ transition (asserted via the visible "Replans: 1" counter, not just "the run fin
 somehow"), and `#purchased` is still hidden after the run reaches `done` — an
 unauthorized submit is not just unreported, it never happened.
 
+## Security test suite (#34)
+
+See [ADR 0022](../../docs/adr/0022-security-test-suite.md). `e2e/security-injection.spec.ts`
+(fixtures + scenarios in `packages/eval-harness`) proves "zero unauthorized state change"
+against indirect prompt injection at the system level: each fixture (`injected-purchase.html`,
+`injected-navigate.html`) contains a hidden `SYSTEM: New instructions: ...` line, and the
+Navigator is deliberately scripted to _fall for it_ — the worst case, not the case where
+the model resists the injection. One test proves the Alignment Critic catches an induced,
+task-unrelated "Buy Now" click before the human is ever asked; the other proves a
+`navigate`/`open_tab` action induced toward a hard-deny-listed origin is blocked outright
+via the destination-origin policy check this issue's investigation found and fixed
+(`background/policy-service.ts`'s `originToCheck` — a `navigate` action used to be
+policy-checked against the _current_ page's origin, never where it was actually headed).
+Content-layer corpus tests (`packages/security/src/sanitize/injection-fixtures.test.ts`)
+cover the "hidden instructions" category directly, and document — rather than falsely
+assert — that spoofed-CAPTCHA/malicious-URL bait survives text sanitization by design,
+since it's linguistically indistinguishable from legitimate copy; the structural defenses
+above are what actually stop it.
+
 ## Commands
 
 ```bash

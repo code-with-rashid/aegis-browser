@@ -64,7 +64,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #31 E2E: read-only use cases — blocked by: #16, #17, #18, #19, #26
 - [x] #32 E2E: confirmation-gated task — blocked by: #27, #22, #23
 - [x] #33 Reliability eval harness — blocked by: #31
-- [ ] #34 Security test suite — blocked by: #20, #22, #23, #32
+- [x] #34 Security test suite — blocked by: #20, #22, #23, #32
 - [ ] #35 Cross-browser build, docs & v0.1.0 — blocked by: all prior issues
 
 ## ADR log
@@ -166,6 +166,17 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   a reliability measurement); live mode only ever reads a credential from an explicit
   `--api-key` flag, never the environment; `pnpm eval` (mock mode) is wired into the same
   CI job as the E2E suite as the regression check.
+- [0022](docs/adr/0022-security-test-suite.md) — Security test suite: found and fixed a
+  real gap while building it — `navigate`/`open_tab` actions were policy-checked against
+  the _current_ origin, never the destination, so an injected "navigate to chase.com"
+  would have sailed past the hard deny-list; fixed with `originToCheck` in
+  `background/policy-service.ts`. Corpus tests split what they guarantee (imperative
+  phrasing gets neutralized) from what they document as a known content-layer limitation
+  (spoofed-CAPTCHA/malicious-URL bait is linguistically indistinguishable from legitimate
+  copy — the real defenses are the destination-origin check and the secret vault, not
+  text matching). Two new E2E scenarios deliberately script a "compromised" Navigator that
+  falls for the injection, proving the Critic/policy-engine backstop still stops the
+  induced action before it ever runs.
 
 ## Notes
 

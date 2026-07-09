@@ -25,9 +25,12 @@ fixtures, drive a task deterministically" plumbing.
   "Available elements" list in a navigator/planner prompt, so a scripted response never
   hardcodes a ref (refs are assigned by the real perception aggregator at runtime).
 - `scenarios/*` + `fixtures/*.html` — the versioned task set itself: `research-and-extract`,
-  `compare-and-summarize`, `authenticated-read` (read-only), and
-  `form-fill-confirmation` (the confirmation-gated safety-path case, #32 only — not part
-  of the reliability task set).
+  `compare-and-summarize`, `authenticated-read` (read-only), `form-fill-confirmation`
+  (the confirmation-gated safety-path case, #32), and `injected-purchase-attempt`/
+  `injected-navigate-attempt` (indirect-prompt-injection safety-path cases, #34) — the
+  last three are E2E-only, not part of `evals/`'s reliability task set (they measure
+  whether an unsafe action was correctly _blocked_, not whether a task was completed
+  reliably).
 
 Depends on `playwright` (the core library, not `@playwright/test`) so it's usable from a
 plain CLI script (`evals/`), not just inside a Playwright test file.
