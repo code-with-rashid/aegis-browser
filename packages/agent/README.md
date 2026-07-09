@@ -100,11 +100,12 @@ gets canceled, not left running uselessly in the background.
 
 `loop/controls.ts` gives the (future) UI a small, decoupled API instead of requiring it
 to know the raw XState actor shape: `stopLoop`/`pauseLoop`/`resumeLoop`/`approveLoop`/
-`rejectLoop`, each just `actor.send({ type: ... })`. `summarizeLoopRun(snapshot)`
+`rejectLoop`/`editLoop`, each just `actor.send({ type: ... })`. `summarizeLoopRun(snapshot)`
 (`loop/summary.ts`) turns any snapshot — mid-run or final — into a plain-data
 `LoopRunSummary` (`outcome`, `stepCount`, `replanCount`, `subGoalHistory`,
-`taskSummary`/`lastError` when set): the "graceful termination + summary" #19 asks for,
-usable for a trace UI (#26) or just a final report.
+`taskSummary`/`lastError`/`pendingConfirmation` when set): the "graceful termination +
+summary" #19 asks for, usable for a trace UI (#26), a confirmation gate UI (#27), or just
+a final report.
 
 ## Persistence & resume
 

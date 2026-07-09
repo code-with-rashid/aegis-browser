@@ -79,4 +79,19 @@ describe('summarizeLoopRun', () => {
     expect('taskSummary' in summary).toBe(false);
     expect('lastError' in summary).toBe(false);
   });
+
+  it('includes pendingConfirmation while a run sits in confirming', () => {
+    const pendingConfirmation = { actions: [], preview: ['Click "Submit Order"'], reason: 'x' };
+    const summary = summarizeLoopRun({
+      value: 'confirming',
+      context: contextFixture({ pendingConfirmation }),
+    });
+
+    expect(summary.pendingConfirmation).toEqual(pendingConfirmation);
+  });
+
+  it('omits pendingConfirmation once it is unset', () => {
+    const summary = summarizeLoopRun({ value: 'actingGate', context: contextFixture() });
+    expect('pendingConfirmation' in summary).toBe(false);
+  });
 });

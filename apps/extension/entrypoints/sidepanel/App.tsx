@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+import { ConfirmationModal } from './confirmation-modal';
 import { useRunStore } from './store';
 import { TraceList } from './trace-list';
 
@@ -29,11 +30,15 @@ export default function App(): React.JSX.Element {
   const lastError = useRunStore((s) => s.lastError);
   const startFailedReason = useRunStore((s) => s.startFailedReason);
   const trace = useRunStore((s) => s.trace);
+  const pendingConfirmation = useRunStore((s) => s.pendingConfirmation);
   const setTask = useRunStore((s) => s.setTask);
   const startRun = useRunStore((s) => s.startRun);
   const stopRun = useRunStore((s) => s.stopRun);
   const pauseRun = useRunStore((s) => s.pauseRun);
   const resumeRun = useRunStore((s) => s.resumeRun);
+  const approveConfirmation = useRunStore((s) => s.approveConfirmation);
+  const rejectConfirmation = useRunStore((s) => s.rejectConfirmation);
+  const editConfirmation = useRunStore((s) => s.editConfirmation);
 
   const [tabLookupError, setTabLookupError] = useState<string | undefined>(undefined);
 
@@ -131,6 +136,15 @@ export default function App(): React.JSX.Element {
       </div>
 
       <TraceList steps={trace} />
+
+      {pendingConfirmation !== undefined ? (
+        <ConfirmationModal
+          request={pendingConfirmation}
+          onApprove={approveConfirmation}
+          onReject={rejectConfirmation}
+          onEdit={editConfirmation}
+        />
+      ) : null}
     </div>
   );
 }

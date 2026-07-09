@@ -1,4 +1,10 @@
-import type { LoopErrorSummary, LoopRunOutcome, TraceStep } from '@aegis/agent';
+import type { Action } from '@aegis/actions';
+import type {
+  ConfirmationRequest,
+  LoopErrorSummary,
+  LoopRunOutcome,
+  TraceStep,
+} from '@aegis/agent';
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 
 import type { MessagePort } from '../../messaging/port';
@@ -16,17 +22,28 @@ export interface RunState {
   readonly startFailedReason: string | undefined;
   /** The current run's trace, oldest first — the same array drives a live-updating timeline while a run is active and a replay of a completed run once it's done (#26). */
   readonly trace: readonly TraceStep[];
+  /** Set exactly while the run is suspended awaiting a human decision (#27) — the confirmation gate modal renders whenever this is defined. */
+  readonly pendingConfirmation: ConfirmationRequest | undefined;
   /** Function-typed properties, not method shorthand — selecting one out of the store (`useRunStore((s) => s.startRun)`) must not trip `@typescript-eslint/unbound-method`. */
   readonly setTask: (task: string) => void;
   readonly startRun: (tabId: number) => void;
   readonly stopRun: () => void;
   readonly pauseRun: () => void;
   readonly resumeRun: () => void;
+  readonly approveConfirmation: () => void;
+  readonly rejectConfirmation: () => void;
+  readonly editConfirmation: (actions: readonly Action[]) => void;
 }
 
 const INITIAL_RUN_FIELDS: Pick<
   RunState,
-  'status' | 'stepCount' | 'replanCount' | 'taskSummary' | 'lastError' | 'startFailedReason'
+  | 'status'
+  | 'stepCount'
+  | 'replanCount'
+  | 'taskSummary'
+  | 'lastError'
+  | 'startFailedReason'
+  | 'pendingConfirmation'
 > = {
   status: 'idle',
   stepCount: 0,
@@ -34,6 +51,7 @@ const INITIAL_RUN_FIELDS: Pick<
   taskSummary: undefined,
   lastError: undefined,
   startFailedReason: undefined,
+  pendingConfirmation: undefined,
 };
 
 type RunBridgePort = MessagePort<PanelToBackgroundMessage, BackgroundToPanelMessage>;
@@ -60,6 +78,7 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
             taskSummary: message.summary.taskSummary,
             lastError: message.summary.lastError,
             startFailedReason: undefined,
+            pendingConfirmation: message.summary.pendingConfirmation,
           });
           return;
         case 'RUN_START_FAILED':
@@ -100,6 +119,18 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
 
       resumeRun() {
         port.send({ type: 'RESUME_RUN' });
+      },
+
+      approveConfirmation() {
+        port.send({ type: 'APPROVE_RUN' });
+      },
+
+      rejectConfirmation() {
+        port.send({ type: 'REJECT_RUN' });
+      },
+
+      editConfirmation(actions: readonly Action[]) {
+        port.send({ type: 'EDIT_RUN', actions });
       },
     };
   });

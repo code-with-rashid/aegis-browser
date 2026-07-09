@@ -54,7 +54,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #25 Side panel shell & messaging bridge — blocked by: #3, #19
 - [x] #26 Action trace / log UI — blocked by: #25, #15
-- [ ] #27 Confirmation gate UI — blocked by: #25, #22
+- [x] #27 Confirmation gate UI — blocked by: #25, #22
 - [ ] #28 Options — models & keys — blocked by: #25, #6
 - [ ] #29 Options — permissions panel — blocked by: #25, #21
 - [ ] #30 Options — secret vault UI — blocked by: #25, #24
@@ -119,6 +119,10 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   `buildTraceStep` (pure, per-step) but accumulation/persistence/broadcast lives in
   `apps/extension`'s `run-manager.ts`; one `TraceStep[]` array serves both a live
   timeline and a completed-run replay, no separate replay mode.
+- [0015](docs/adr/0015-confirmation-gate-ui.md) — Confirmation gate UI: native `<dialog>`
+  - `showModal()` for real focus-trap/inert-background semantics; Escape (`cancel`) is
+    treated as an explicit Reject, never a silent dismiss; Edit only offers per-action
+    free-text fields, and Save still requires a separate Approve afterward.
 
 ## Notes
 

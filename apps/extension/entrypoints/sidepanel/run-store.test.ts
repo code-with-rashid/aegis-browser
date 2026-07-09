@@ -1,4 +1,5 @@
-import type { TraceStep } from '@aegis/agent';
+import type { ConfirmationRequest, TraceStep } from '@aegis/agent';
+import { toElementRef } from '@aegis/shared';
 import { describe, expect, it } from 'vitest';
 
 import { createFakePortPair } from '../../messaging/fake-port';
@@ -7,6 +8,15 @@ import { createRunStore } from './run-store';
 
 function panelAndBackgroundPorts() {
   return createFakePortPair<PanelToBackgroundMessage, BackgroundToPanelMessage>();
+}
+
+function confirmationFixture(overrides: Partial<ConfirmationRequest> = {}): ConfirmationRequest {
+  return {
+    actions: [{ type: 'click', ref: toElementRef('ax:1') }],
+    preview: ['Click "Submit Order"'],
+    reason: 'submit order is state-changing',
+    ...overrides,
+  };
 }
 
 function traceStepFixture(overrides: Partial<TraceStep> = {}): TraceStep {
@@ -197,5 +207,84 @@ describe('createRunStore', () => {
     backgroundPort.send({ type: 'RUN_IDLE' });
 
     expect(store.getState().trace).toEqual([]);
+  });
+
+  it('starts with no pending confirmation', () => {
+    const { a: panelPort } = panelAndBackgroundPorts();
+    const store = createRunStore(panelPort);
+    expect(store.getState().pendingConfirmation).toBeUndefined();
+  });
+
+  it('a RUN_STATUS message with pendingConfirmation surfaces it', () => {
+    const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+    const store = createRunStore(panelPort);
+    const pendingConfirmation = confirmationFixture();
+
+    backgroundPort.send({
+      type: 'RUN_STATUS',
+      summary: {
+        outcome: 'active',
+        task: 'Delete account',
+        stepCount: 1,
+        replanCount: 0,
+        subGoalHistory: [],
+        pendingConfirmation,
+      },
+    });
+
+    expect(store.getState().pendingConfirmation).toEqual(pendingConfirmation);
+  });
+
+  it('a subsequent RUN_STATUS without pendingConfirmation clears it', () => {
+    const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+    const store = createRunStore(panelPort);
+
+    backgroundPort.send({
+      type: 'RUN_STATUS',
+      summary: {
+        outcome: 'active',
+        task: 'Delete account',
+        stepCount: 1,
+        replanCount: 0,
+        subGoalHistory: [],
+        pendingConfirmation: confirmationFixture(),
+      },
+    });
+    backgroundPort.send({
+      type: 'RUN_STATUS',
+      summary: {
+        outcome: 'active',
+        task: 'Delete account',
+        stepCount: 2,
+        replanCount: 0,
+        subGoalHistory: [],
+      },
+    });
+
+    expect(store.getState().pendingConfirmation).toBeUndefined();
+  });
+
+  it('approveConfirmation/rejectConfirmation send the matching message', () => {
+    const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+    const store = createRunStore(panelPort);
+    const received: PanelToBackgroundMessage[] = [];
+    backgroundPort.onMessage((message) => received.push(message));
+
+    store.getState().approveConfirmation();
+    store.getState().rejectConfirmation();
+
+    expect(received).toEqual([{ type: 'APPROVE_RUN' }, { type: 'REJECT_RUN' }]);
+  });
+
+  it('editConfirmation sends EDIT_RUN with the revised actions', () => {
+    const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+    const store = createRunStore(panelPort);
+    const received: PanelToBackgroundMessage[] = [];
+    backgroundPort.onMessage((message) => received.push(message));
+
+    const editedActions = [{ type: 'input_text' as const, ref: toElementRef('ax:2'), text: 'ok' }];
+    store.getState().editConfirmation(editedActions);
+
+    expect(received).toEqual([{ type: 'EDIT_RUN', actions: editedActions }]);
   });
 });
