@@ -15,6 +15,9 @@ export type {
   PolicyCheckOutput,
   PolicyDecision,
   PolicyService,
+  CriticCheckInput,
+  CriticCheckOutput,
+  CriticService,
   ActService,
   VerifyInput,
   VerifyOutput,
@@ -80,3 +83,10 @@ export type { BuildVerifierPromptOptions } from './verifier/prompt';
 export { VERIFIER_SYSTEM_PROMPT, buildVerifierPrompt } from './verifier/prompt';
 export type { CreateVerifierServiceOptions } from './verifier/create-verifier-service';
 export { createVerifierService } from './verifier/create-verifier-service';
+
+export type { CriticLlmOutput } from './critic/schema';
+export { CriticOutputSchema } from './critic/schema';
+export type { BuildCriticPromptOptions } from './critic/prompt';
+export { CRITIC_SYSTEM_PROMPT, buildCriticPrompt } from './critic/prompt';
+export type { CreateCriticServiceOptions } from './critic/create-critic-service';
+export { createCriticService } from './critic/create-critic-service';

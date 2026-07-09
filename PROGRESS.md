@@ -47,7 +47,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #20 Trust-tagging & sanitizer — blocked by: #3
 - [x] #21 Security policy engine — blocked by: #12, #3
 - [x] #22 Confirmation gate — blocked by: #21, #15
-- [ ] #23 Alignment critic — blocked by: #21, #5
+- [x] #23 Alignment critic — blocked by: #21, #5
 - [ ] #24 Secret vault & native fill — blocked by: #3, #13
 
 ### M6 — UI
@@ -101,6 +101,10 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   becomes a three-way `allow/confirm/deny` decision (locally typed, no
   `@aegis/agent` → `@aegis/security` import); `deny` routes to `replanning`, not
   `failed`; `EDIT` self-transitions within `confirming` to revise pending actions.
+- [0011](docs/adr/0011-alignment-critic.md) — Alignment critic: new `aligning` state
+  between `policyCheck` and `confirming`; `!aligned` routes to `replanning` (never asks
+  the human), same pattern as a policy `deny`; always calls the model (no heuristic
+  shortcut, unlike the Verifier — alignment is inherently semantic).
 
 ## Notes
 

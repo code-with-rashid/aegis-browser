@@ -10,14 +10,15 @@ import type { RunSummary } from './run-summary';
  * machine itself is pure and testable with mocks (#15's acceptance criteria). Real
  * implementations arrive in later issues: {@link PlannerService} (#16),
  * {@link NavigatorService} (#17), {@link VerifierService} (#18), {@link PolicyService}
- * (#21). {@link PerceiveService}/{@link ActService} wrap the already-built perception
- * (#10) and action-runner (#14) pipelines.
+ * (#21), {@link CriticService} (#23). {@link PerceiveService}/{@link ActService} wrap the
+ * already-built perception (#10) and action-runner (#14) pipelines.
  */
 export interface LoopServices {
   readonly perceive: PerceiveService;
   readonly plan: PlannerService;
   readonly decide: NavigatorService;
   readonly checkPolicy: PolicyService;
+  readonly checkAlignment: CriticService;
   readonly act: ActService;
   readonly verify: VerifierService;
 }
@@ -88,6 +89,29 @@ export type PolicyService = (
   input: PolicyCheckInput,
   signal?: AbortSignal,
 ) => Promise<Result<PolicyCheckOutput, AgentError>>;
+
+export interface CriticCheckInput {
+  /** The user's original, trusted task — what alignment is judged against. */
+  readonly task: string;
+  readonly subGoal: string;
+  readonly actions: readonly Action[];
+  readonly perception: PerceptionPayload | undefined;
+}
+export interface CriticCheckOutput {
+  /** False when the action appears induced by page content rather than the user's intent. */
+  readonly aligned: boolean;
+  readonly reasoning: string;
+}
+/**
+ * The alignment critic (`docs/DESIGN.md` §7.2): an independent second pass, run only on
+ * actions the policy engine already flagged `confirm`, asking whether they serve the
+ * user's original intent or look induced by the page. Runs before the human ever sees a
+ * confirmation preview — a misaligned action is blocked and explained instead.
+ */
+export type CriticService = (
+  input: CriticCheckInput,
+  signal?: AbortSignal,
+) => Promise<Result<CriticCheckOutput, AgentError>>;
 
 export type ActService = (
   actions: readonly Action[],

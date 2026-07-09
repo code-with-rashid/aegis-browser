@@ -1,10 +1,11 @@
 # @aegis/agent
 
 The orchestration core. Hosts the resumable XState loop machine
-(`Planning → Perceiving → Deciding → PolicyCheck → (Confirming?) → Acting → Verifying`),
-the Planner (decomposition/replanning), the Navigator (next-action selection), the
-Verifier (sub-goal success/failure judgment), and loop guardrails (step/replan budgets,
-stall-forced replan, stop/pause/resume).
+(`Planning → Perceiving → Deciding → PolicyCheck → (Aligning → Confirming?) → Acting →
+Verifying`), the Planner (decomposition/replanning), the Navigator (next-action
+selection), the Verifier (sub-goal success/failure judgment), the alignment critic
+(independent second-pass judgment before any state-changing action executes), and loop
+guardrails (step/replan budgets, stall-forced replan, stop/pause/resume).
 
 ## The loop machine
 
@@ -23,10 +24,10 @@ a mocked `LoopServices`):
 
 - `perceive`/`act` wrap the already-built perception (#10) and action-runner (#14)
   pipelines.
-- `plan`/`decide`/`verify` are ports the real Planner (#16), Navigator (#17), and
-  Verifier (#18) implement. `checkPolicy` (#22) is the same shape, but its real adapter —
-  backed by `@aegis/security`'s policy engine (#21) — is composition-root work; see
-  "Confirmation gate" below.
+- `plan`/`decide`/`verify`/`checkAlignment` are ports the real Planner (#16), Navigator
+  (#17), Verifier (#18), and alignment critic (#23) implement. `checkPolicy` (#22) is the
+  same shape, but its real adapter — backed by `@aegis/security`'s policy engine (#21) —
+  is composition-root work; see "Confirmation gate" below.
 
 `executorContext: ExecutorContext` (the live `CdpSession` + `TabManager` from
 `@aegis/actions`) is closed over by the same factory call, not threaded through machine
@@ -60,6 +61,24 @@ From `confirming`: `APPROVE` clears `pendingConfirmation` and proceeds to `actin
 preview, and stays in `confirming` — a human can revise a proposed action without it ever
 executing unsupervised. `loop/controls.ts` exposes all three as `approveLoop`/
 `rejectLoop`/`editLoop`.
+
+## The alignment critic
+
+`aligning` sits between `policyCheck`'s `confirm` outcome and `confirming`
+(`docs/adr/0011-alignment-critic.md`) — only actions already flagged `confirm` are
+checked; `allow` and `deny` never reach it. `createCriticService`
+(`critic/create-critic-service.ts`) builds the `CriticService` it invokes: unlike the
+Verifier, there's no mechanical heuristic for "does this serve the user's intent," so it
+always calls the model (the cheap, low-temperature `critic` role).
+
+`!aligned` routes straight to `replanning` with a `MISALIGNED_ACTION` `lastError` — the
+human is never shown a confirmation preview for an action the critic thinks was induced
+by the page rather than actually requested. `aligned` proceeds to `confirming` exactly as
+before #23, carrying the original policy reason through via `context.policyCheckReason`
+(the one new context field the critic's insertion required, since `policyCheck` and
+`confirming` are no longer adjacent states). `buildCriticPrompt` (`critic/prompt.ts`)
+reuses `describeAction` from the confirmation module so the critic and the human preview
+describe the same proposed actions consistently.
 
 ## Guardrails & controls
 

@@ -7,6 +7,8 @@ import { buildConfirmationRequest, type ConfirmationRequest } from './confirmati
 import type { AgentError } from './errors';
 import { summarizeRunOutcome, type RunSummary } from './run-summary';
 import type {
+  CriticCheckInput,
+  CriticCheckOutput,
   DecideInput,
   DecideOutput,
   LoopServices,
@@ -65,6 +67,8 @@ export interface AgentLoopContext {
   readonly taskSummary: string | undefined;
   /** The actions currently awaiting human approval — set on entering `confirming`. */
   readonly pendingConfirmation: ConfirmationRequest | undefined;
+  /** The policy engine's reason for requiring confirmation — carried from `policyCheck` through `aligning` into the eventual `pendingConfirmation`. */
+  readonly policyCheckReason: string | undefined;
 }
 
 export type AgentLoopEvent =
@@ -108,6 +112,9 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       policyActor: fromPromise<Result<PolicyCheckOutput, AgentError>, PolicyCheckInput>(
         ({ input, signal }) => services.checkPolicy(input, signal),
       ),
+      criticActor: fromPromise<Result<CriticCheckOutput, AgentError>, CriticCheckInput>(
+        ({ input, signal }) => services.checkAlignment(input, signal),
+      ),
       actActor: fromPromise<RunOutcome, { actions: readonly Action[] }>(({ input, signal }) =>
         services.act(input.actions, executorContext, signal),
       ),
@@ -132,6 +139,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       lastError: undefined,
       taskSummary: undefined,
       pendingConfirmation: undefined,
+      policyCheckReason: undefined,
     }),
     initial: 'planning',
     states: {
@@ -290,16 +298,10 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
             {
               guard: ({ event }) =>
                 !isErr(event.output) && event.output.value.decision === 'confirm',
-              target: 'confirming',
+              target: 'aligning',
               actions: assign({
-                pendingConfirmation: ({ context, event }) =>
-                  !isErr(event.output)
-                    ? buildConfirmationRequest(
-                        context.proposedActions,
-                        context.perception,
-                        event.output.value.reason,
-                      )
-                    : undefined,
+                policyCheckReason: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.reason : undefined,
               }),
             },
             { target: 'actingGate' },
@@ -310,6 +312,66 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
               lastError: () => ({
                 code: 'POLICY_CHECK_FAILED',
                 message: 'Policy check threw unexpectedly',
+              }),
+            }),
+          },
+        },
+        on: { STOP: 'stopped' },
+      },
+
+      /**
+       * The alignment critic (#23, `docs/DESIGN.md` §7.2): an independent second pass on
+       * actions the policy engine already flagged `confirm`, run before the human ever
+       * sees a confirmation preview. A misaligned verdict blocks the action and replans —
+       * the human is never asked to approve something the critic thinks was induced by
+       * the page rather than their own request.
+       */
+      aligning: {
+        invoke: {
+          src: 'criticActor',
+          input: ({ context }) => ({
+            task: context.task,
+            subGoal: context.subGoal ?? context.task,
+            actions: context.proposedActions,
+            perception: context.perception,
+          }),
+          onDone: [
+            {
+              guard: ({ event }) => isErr(event.output),
+              target: 'failed',
+              actions: assign({
+                lastError: ({ event }) =>
+                  isErr(event.output) ? toErrorSummary(event.output.error) : undefined,
+              }),
+            },
+            {
+              guard: ({ event }) => !isErr(event.output) && !event.output.value.aligned,
+              target: 'replanning',
+              actions: assign({
+                lastError: ({ event }) =>
+                  !isErr(event.output)
+                    ? { code: 'MISALIGNED_ACTION', message: event.output.value.reasoning }
+                    : undefined,
+              }),
+            },
+            {
+              target: 'confirming',
+              actions: assign({
+                pendingConfirmation: ({ context }) =>
+                  buildConfirmationRequest(
+                    context.proposedActions,
+                    context.perception,
+                    context.policyCheckReason,
+                  ),
+              }),
+            },
+          ],
+          onError: {
+            target: 'failed',
+            actions: assign({
+              lastError: () => ({
+                code: 'CRITIC_FAILED',
+                message: 'Alignment critic threw unexpectedly',
               }),
             }),
           },
