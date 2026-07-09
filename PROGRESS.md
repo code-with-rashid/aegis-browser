@@ -44,7 +44,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M5 — Security core
 
-- [ ] #20 Trust-tagging & sanitizer — blocked by: #3
+- [x] #20 Trust-tagging & sanitizer — blocked by: #3
 - [ ] #21 Security policy engine — blocked by: #12, #3
 - [ ] #22 Confirmation gate — blocked by: #21, #15
 - [ ] #23 Alignment critic — blocked by: #21, #5
