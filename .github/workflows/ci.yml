@@ -40,3 +40,34 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  e2e:
+    name: e2e (read-only use cases)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build extension
+        run: pnpm --filter @aegis/extension build
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @aegis/extension exec playwright install --with-deps chromium
+
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Run E2E (headed, via Xvfb)
+        run: xvfb-run --auto-servernum -- pnpm --filter @aegis/extension e2e

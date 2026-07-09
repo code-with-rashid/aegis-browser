@@ -61,7 +61,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M7 — Integration, evals, release
 
-- [ ] #31 E2E: read-only use cases — blocked by: #16, #17, #18, #19, #26
+- [x] #31 E2E: read-only use cases — blocked by: #16, #17, #18, #19, #26
 - [ ] #32 E2E: confirmation-gated task — blocked by: #27, #22, #23
 - [ ] #33 Reliability eval harness — blocked by: #31
 - [ ] #34 Security test suite — blocked by: #20, #22, #23, #32
@@ -138,6 +138,17 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   nothing in `@aegis/agent` associates a secret with a site or run; `SecretVaultPanel`
   takes an injected `SecretVault`, tested against a real `createMemoryStorage()`-backed
   vault; no reveal for an existing secret's value, re-adding a name overwrites it.
+- [0019](docs/adr/0019-e2e-read-only-use-cases.md) — E2E read-only use cases: fixture
+  sites served locally; "mock/local model" is a real local HTTP server speaking the OpenAI
+  chat-completions wire format (verified against the real adapter directly); scripted
+  Navigator responses extract real element refs from the actual prompt text rather than
+  hardcoding any; two tabs (fixture + side-panel-as-a-tab) with the fixture kept active via
+  `bringToFront()` right before Start, since `chrome.tabs.query({active:true})` decides
+  which tab the run targets. **Discovered but not fixed**: `background/policy-service.ts`
+  never passes `riskContext` to `PolicyEngine.evaluate`, so the state-changing keyword
+  elevation never actually triggers in the real running system — left for #32 to close,
+  since that issue is about the confirmation gate and a confirmation-gated E2E case would
+  otherwise never confirm.
 
 ## Notes
 

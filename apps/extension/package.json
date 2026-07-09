@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
+    "e2e": "playwright test",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
@@ -33,6 +34,7 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",
