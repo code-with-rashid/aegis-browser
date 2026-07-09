@@ -21,6 +21,7 @@
       "outputs": []
     },
     "eval": {
+      "dependsOn": ["^build"],
       "cache": false
     }
   }

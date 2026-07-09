@@ -1,13 +1,19 @@
-import { expect, test } from '@playwright/test';
-
-import { launchExtension } from './extension-context';
-import { startFakeModelServer } from './fake-model-server';
 import {
   createFormFillConfirmationResponder,
+  FIXTURES_DIR,
+  FORM_FILL_CONFIRMATION_FIXTURE,
   FORM_FILL_CONFIRMATION_TASK,
-} from './scenarios/form-fill-confirmation';
-import { seedModelRoutingConfig } from './seed-storage';
-import { startStaticServer } from './static-server';
+  launchExtension,
+  seedModelRoutingConfig,
+  startFakeModelServer,
+  startStaticServer,
+} from '@aegis/eval-harness';
+import { expect, test } from '@playwright/test';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const EXTENSION_PATH = path.resolve(HERE, '../.output/chrome-mv3');
 
 /**
  * Proves the safety path (#32): a state-changing action (a "Buy Now" click — its
@@ -18,15 +24,15 @@ import { startStaticServer } from './static-server';
  * `PolicyEngine.evaluate` — fixed as part of this issue.
  */
 test('form-fill task pauses at a state-changing click, and reject never lets it run', async () => {
-  const staticServer = await startStaticServer();
+  const staticServer = await startStaticServer(FIXTURES_DIR);
   const modelServer = await startFakeModelServer(createFormFillConfirmationResponder());
-  const extension = await launchExtension();
+  const extension = await launchExtension(EXTENSION_PATH);
 
   try {
     await seedModelRoutingConfig(extension.serviceWorker, modelServer.baseUrl);
 
     const fixturePage = await extension.context.newPage();
-    await fixturePage.goto(`${staticServer.baseUrl}/checkout.html`);
+    await fixturePage.goto(`${staticServer.baseUrl}/${FORM_FILL_CONFIRMATION_FIXTURE}`);
 
     const sidePanelPage = await extension.context.newPage();
     await sidePanelPage.goto(`chrome-extension://${extension.extensionId}/sidepanel.html`);

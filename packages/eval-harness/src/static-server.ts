@@ -2,23 +2,23 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURES_DIR = path.join(HERE, 'fixtures');
 
 export interface StaticServerHandle {
   readonly baseUrl: string;
   close(): Promise<void>;
 }
 
-/** Serves `e2e/fixtures/*.html` over real HTTP — the agent navigates a `chrome.tabs` tab to these, not a Playwright-controlled page, so they need a genuine URL. */
-export function startStaticServer(): Promise<StaticServerHandle> {
+/**
+ * Serves the HTML files in `fixturesDir` over real HTTP — the agent navigates a
+ * `chrome.tabs` tab to these, not a Playwright-controlled page, so they need a genuine
+ * URL rather than a `file://` path.
+ */
+export function startStaticServer(fixturesDir: string): Promise<StaticServerHandle> {
   return new Promise((resolve, reject) => {
     const server: Server = createServer((req, res) => {
       const requestPath = (req.url ?? '/').split('?')[0] ?? '/';
-      const filePath = path.join(FIXTURES_DIR, path.normalize(requestPath));
-      if (!filePath.startsWith(FIXTURES_DIR)) {
+      const filePath = path.join(fixturesDir, path.normalize(requestPath));
+      if (!filePath.startsWith(fixturesDir)) {
         res.writeHead(403).end();
         return;
       }

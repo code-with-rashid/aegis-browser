@@ -34,6 +34,7 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@aegis/eval-harness": "workspace:*",
     "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",

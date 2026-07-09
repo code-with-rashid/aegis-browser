@@ -7,7 +7,7 @@ export interface FakeModelServerHandle {
 
 /**
  * Returns the scripted JSON text for the `callIndex`-th call made under `systemPrompt`
- * (0-based, per distinct system prompt) — the fake model's entire "brain" for one E2E
+ * (0-based, per distinct system prompt) — the fake model's entire "brain" for one
  * scenario.
  */
 export type FakeModelResponder = (
@@ -33,11 +33,11 @@ function contentText(content: unknown): string {
 /**
  * A minimal local HTTP server implementing just enough of the OpenAI chat-completions
  * wire format (`POST /chat/completions`) for `@ai-sdk/openai-compatible` to parse a
- * response — the "mock/local model" #31's acceptance criteria calls for, standing in for
- * a real provider so E2E runs are deterministic and need no API key. `respond` decides
- * the scripted content per call; this server only handles the transport plumbing
- * (parsing `messages`, tracking a call count per distinct system prompt, and writing back
- * a schema-valid `OpenAICompatibleChatResponseSchema` body).
+ * response — the "mock/local model" standing in for a real provider so a scenario run is
+ * deterministic and needs no API key. `respond` decides the scripted content per call;
+ * this server only handles the transport plumbing (parsing `messages`, tracking a call
+ * count per distinct system prompt, and writing back a schema-valid
+ * `OpenAICompatibleChatResponseSchema` body).
  */
 export function startFakeModelServer(respond: FakeModelResponder): Promise<FakeModelServerHandle> {
   const callCounts = new Map<string, number>();

@@ -5,6 +5,8 @@ export const RESEARCH_AND_EXTRACT_TASK =
 
 export const RESEARCH_AND_EXTRACT_EXPECTED_SUMMARY = 'Fredonia City';
 
+export const RESEARCH_AND_EXTRACT_FIXTURE = 'research.html';
+
 /**
  * Scripted planner -> navigator -> verifier -> planner sequence for `research.html`:
  * one `extract` reads the page (the fact is already in perceived content, no ref
