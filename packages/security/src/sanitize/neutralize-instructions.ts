@@ -16,6 +16,11 @@ const INJECTION_PATTERNS: readonly RegExp[] = [
   /updated\s+instructions?\s*:/gi,
   /you\s+are\s+now\s+/gi,
   /act\s+as\s+(if\s+you\s+are\s+)?/gi,
+  /override\s+(your\s+)?(previous\s+)?(guidelines|instructions|rules)/gi,
+  /(reveal|repeat|print|output)\s+(your\s+)?(system\s+prompt|instructions)/gi,
+  // Requires "now" — "you must comply with our terms" is common, legitimate ToS
+  // boilerplate; "you must now comply" is a distinctly injection-flavored demand.
+  /you\s+must\s+now\s+(ignore|disregard|comply|obey)/gi,
   // Spoofed role markers / chat-template control tokens.
   /^\s*system\s*:/gim,
   /^\s*assistant\s*:/gim,
