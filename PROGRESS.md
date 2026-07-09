@@ -55,7 +55,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #25 Side panel shell & messaging bridge — blocked by: #3, #19
 - [x] #26 Action trace / log UI — blocked by: #25, #15
 - [x] #27 Confirmation gate UI — blocked by: #25, #22
-- [ ] #28 Options — models & keys — blocked by: #25, #6
+- [x] #28 Options — models & keys — blocked by: #25, #6
 - [ ] #29 Options — permissions panel — blocked by: #25, #21
 - [ ] #30 Options — secret vault UI — blocked by: #25, #24
 
@@ -123,6 +123,11 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   - `showModal()` for real focus-trap/inert-background semantics; Escape (`cancel`) is
     treated as an explicit Reject, never a silent dismiss; Edit only offers per-action
     free-text fields, and Save still requires a separate Approve afterward.
+- [0016](docs/adr/0016-options-models-and-keys.md) — Options page: connection test runs
+  directly from the options page (same `host_permissions` CORS bypass as the background,
+  no round-trip needed) via an injectable `ProviderFactory`; one explicit Save gated on
+  every role parsing to a valid `ProviderConfig`; options page opens in its own tab via
+  WXT's per-entrypoint `<meta name="manifest.open_in_tab">` convention.
 
 ## Notes
 
