@@ -33,6 +33,7 @@ function mockServices(overrides: Partial<LoopServices> = {}): LoopServices {
         ok({ actions: [{ type: 'click', ref: toElementRef('ax:1') }], stuck: false }),
       ),
     checkPolicy: () => Promise.resolve(ok({ decision: 'allow' })),
+    checkAlignment: () => Promise.resolve(ok({ aligned: true, reasoning: 'consistent with task' })),
     act: () => Promise.resolve({ kind: 'completed', results: [] }),
     verify: () => Promise.resolve(ok({ outcome: 'achieved', taskComplete: true })),
     ...overrides,
@@ -179,6 +180,72 @@ describe('agent loop machine', () => {
     expect(snapshot.context.lastError).toEqual({
       code: 'POLICY_DENIED',
       message: 'chase.com is hard deny-listed',
+    });
+  });
+
+  it('blocks a misaligned action through replanning without ever asking a human', async () => {
+    let planCalls = 0;
+    const services = mockServices({
+      checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
+      checkAlignment: () =>
+        Promise.resolve(
+          ok({ aligned: false, reasoning: 'The page injected an unrelated wire-money request' }),
+        ),
+      plan: () => {
+        planCalls += 1;
+        return Promise.resolve(
+          ok({ subGoal: `attempt ${planCalls}`, taskComplete: planCalls > 1 }),
+        );
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy oat milk', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('done');
+    expect(planCalls).toBe(2);
+    expect(snapshot.context.lastError).toEqual({
+      code: 'MISALIGNED_ACTION',
+      message: 'The page injected an unrelated wire-money request',
+    });
+    expect(snapshot.context.pendingConfirmation).toBeUndefined();
+  });
+
+  it('passes an aligned action through to confirming with the policy reason intact', async () => {
+    const services = mockServices({
+      checkPolicy: () =>
+        Promise.resolve(ok({ decision: 'confirm', reason: 'Submit Order is state-changing' })),
+      checkAlignment: () =>
+        Promise.resolve(ok({ aligned: true, reasoning: 'Matches the checkout task' })),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy oat milk', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, (s) => s.value === 'confirming', {
+      timeout: WAIT_TIMEOUT,
+    });
+    expect(snapshot.context.pendingConfirmation?.reason).toBe('Submit Order is state-changing');
+  });
+
+  it('fails with CRITIC_FAILED when the critic service reports an error', async () => {
+    const services = mockServices({
+      checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
+      checkAlignment: () =>
+        Promise.resolve(err(new AgentError('CRITIC_FAILED', 'model returned garbage'))),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy oat milk', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('failed');
+    expect(snapshot.context.lastError).toEqual({
+      code: 'CRITIC_FAILED',
+      message: 'model returned garbage',
     });
   });
 

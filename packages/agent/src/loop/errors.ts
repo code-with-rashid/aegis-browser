@@ -1,7 +1,11 @@
 import { AegisError } from '@aegis/shared';
 
 export type AgentErrorCode =
-  'PLANNER_FAILED' | 'NAVIGATOR_FAILED' | 'VERIFIER_FAILED' | 'POLICY_CHECK_FAILED';
+  | 'PLANNER_FAILED'
+  | 'NAVIGATOR_FAILED'
+  | 'VERIFIER_FAILED'
+  | 'POLICY_CHECK_FAILED'
+  | 'CRITIC_FAILED';
 
 /** Typed error raised by a loop service (planner/navigator/verifier/policy). */
 export class AgentError extends AegisError {
