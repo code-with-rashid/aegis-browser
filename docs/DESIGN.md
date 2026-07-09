@@ -1,9 +1,8 @@
 # Aegis — MVP Design & Architecture Spec
 
-> **Working codename:** *Aegis* (placeholder — rename before launch).
 > **What it is:** A local-first, bring-your-own-key browser-automation agent delivered as an MV3 extension, where **reliability and safety are the product**.
-> **Positioning:** *Private, reliable, safe web automation that runs in your own logged-in browser.*
-> **Status:** Design draft v0.1 · July 2026 · Author: Rashid
+> **Positioning:** _Private, reliable, safe web automation that runs in your own logged-in browser._
+> **Status:** Implemented — v0.1.0 shipped. See `PROGRESS.md` and `docs/adr/` for how the design below was realized and where real decisions departed from this draft.
 
 ---
 
@@ -11,7 +10,7 @@
 
 Nanobrowser proved the demand for a free, private, BYOK browser agent — but it is beatable on the two axes that actually decide winners: **reliability** (it's model-gated, loops, and its structured-output parsing breaks) and **trust/safety** (only "lightweight" guardrails against prompt injection; credentials flow into the LLM prompt). Meanwhile the market is splitting: free AI-native browsers (Comet, Atlas) pull consumers from above; cloud frameworks (Browser Use, Skyvern) own developers/enterprise from below, but gate their best reliability behind paid cloud.
 
-**Aegis's wedge:** keep the genuine moat of a local-first BYOK extension — it runs in *your* browser with *your* logins, nothing goes to a vendor server — and win on the two things nobody has fused into an open extension: **hybrid perception for reliability** and **a security-first architecture that is on by default.**
+**Aegis's wedge:** keep the genuine moat of a local-first BYOK extension — it runs in _your_ browser with _your_ logins, nothing goes to a vendor server — and win on the two things nobody has fused into an open extension: **hybrid perception for reliability** and **a security-first architecture that is on by default.**
 
 ### Design principles
 
@@ -46,20 +45,20 @@ Nanobrowser proved the demand for a free, private, BYOK browser agent — but it
 
 ### Success metrics
 
-| Metric | Target for v0.1 |
-|---|---|
-| Task success rate (internal eval set, live sites) | Beat Nanobrowser baseline by ≥15 pts |
-| State-changing actions gated by confirmation | 100% |
-| Credential-in-prompt incidents | 0 |
+| Metric                                               | Target for v0.1                            |
+| ---------------------------------------------------- | ------------------------------------------ |
+| Task success rate (internal eval set, live sites)    | Beat Nanobrowser baseline by ≥15 pts       |
+| State-changing actions gated by confirmation         | 100%                                       |
+| Credential-in-prompt incidents                       | 0                                          |
 | Prompt-injection suite (exfil / unauthorized action) | 0 successful attacks in the baseline suite |
-| Median steps per successful task vs. human reference | ≤ 2.0× |
-| p50 time-to-first-action | < 4 s |
+| Median steps per successful task vs. human reference | ≤ 2.0×                                     |
+| p50 time-to-first-action                             | < 4 s                                      |
 
 ---
 
 ## 3. Target user & MVP use cases
 
-**Primary user:** a privacy-conscious prosumer/developer who wants to automate real web tasks *in their own logged-in browser* and won't hand logins to a cloud agent.
+**Primary user:** a privacy-conscious prosumer/developer who wants to automate real web tasks _in their own logged-in browser_ and won't hand logins to a cloud agent.
 
 **MVP "happy path" scenarios** (also the seed of the eval set):
 
@@ -95,7 +94,6 @@ flowchart TB
     LLM["LLM layer (Vercel AI SDK, BYOK)"]
   end
   subgraph PAGE["Target tab"]
-    CS["Content script (lightweight DOM ops)"]
     CDP["chrome.debugger → CDP"]
   end
   Store[("chrome.storage + WebCrypto vault")]
@@ -107,9 +105,7 @@ flowchart TB
   Sec --> Critic --> LLM
   Sec -->|state-changing| Confirm
   Loop --> CDP
-  Loop --> CS
   CDP --> PAGE
-  CS --> PAGE
   Loop --> Trace
   Keys --> Store
   Vault --> Store
@@ -121,7 +117,7 @@ flowchart TB
 **Why this shape**
 
 - **Background service worker owns the loop & CDP.** MV3 workers can be evicted, so loop state is persisted to `chrome.storage.session` after every transition; the XState machine is resumable.
-- **Perception/control is CDP-first with a content-script fast path.** `chrome.debugger` gives us the accessibility tree, robust DOM, screenshots, and precise input events — the proven approach. A content script handles cheap DOM reads/highlights without attaching the debugger, minimizing how often the "debugging this browser" banner appears.
+- **Perception/control is CDP-only.** `chrome.debugger` gives us the accessibility tree, robust DOM, screenshots, and precise input events — the proven approach. v0.1.0 has no content-script fast path (see `apps/extension/README.md`'s "Note on `chrome.debugger`"): every perception/action call goes through CDP, accepting the "debugging this browser" banner as expected behavior rather than maintaining a second code path to partially avoid it.
 - **The security policy engine sits between the agent and the browser.** No action reaches the page without passing policy → (critic) → (confirmation) checks. This is the architectural heart of the product.
 
 ---
@@ -133,7 +129,7 @@ Two agents, one explicit state machine. We keep the **Planner + Navigator** spli
 - **Planner** (higher-temp, "smart" model): decomposes the task, maintains the plan, re-plans on obstacles, decides when the task is done. Runs at the start and whenever the Navigator is stuck or a sub-goal completes.
 - **Navigator** (lower-temp, cheap/fast model): given current perception + the active sub-goal, emits the next concrete action(s).
 - **Verifier** (cheap model or heuristic): after acting, checks "did that achieve the sub-goal?" against fresh perception. Prevents the "declared success but nothing happened" failure class.
-- **Alignment critic** (safety, see §7): independently checks proposed state-changing actions against the *user's* original intent before they're allowed.
+- **Alignment critic** (safety, see §7): independently checks proposed state-changing actions against the _user's_ original intent before they're allowed.
 
 ```mermaid
 stateDiagram-v2
@@ -164,11 +160,11 @@ stateDiagram-v2
 
 ```ts
 const AgentBrain = z.object({
-  observation: z.string(),        // what the agent sees right now
-  reasoning: z.string(),          // why it's choosing this (shown in the trace)
-  memory: z.string(),             // compact running state to carry forward
+  observation: z.string(), // what the agent sees right now
+  reasoning: z.string(), // why it's choosing this (shown in the trace)
+  memory: z.string(), // compact running state to carry forward
   nextGoal: z.string(),
-  actions: z.array(Action).max(4) // Navigator; Planner returns `plan` instead
+  actions: z.array(Action).max(4), // Navigator; Planner returns `plan` instead
 });
 ```
 
@@ -199,13 +195,13 @@ flowchart LR
 
 ```ts
 interface PerceivedElement {
-  ref: string;              // stable handle used by actions
-  role: string;             // button, link, textbox, ...
-  name: string;             // accessible name / visible label
+  ref: string; // stable handle used by actions
+  role: string; // button, link, textbox, ...
+  name: string; // accessible name / visible label
   value?: string;
   state?: { disabled?: boolean; checked?: boolean; expanded?: boolean };
-  bounds?: Rect;            // for vision fallback / highlighting
-  source: "ax" | "dom" | "vision";
+  bounds?: Rect; // for vision fallback / highlighting
+  source: 'ax' | 'dom' | 'vision';
 }
 ```
 
@@ -213,33 +209,46 @@ interface PerceivedElement {
 
 ## 7. Security & trust model (the differentiator)
 
-The threat is **indirect prompt injection**: hidden instructions in page content that hijack the agent (the exploit class that produced account-takeovers against Comet/Operator/Atlas in 2025). Our design applies Simon Willison's *lethal trifecta* and Meta's *Rule of Two*: never allow **untrusted content + private data + an exfiltration channel** to coexist unsupervised in one step.
+The threat is **indirect prompt injection**: hidden instructions in page content that hijack the agent (the exploit class that produced account-takeovers against Comet/Operator/Atlas in 2025). Our design applies Simon Willison's _lethal trifecta_ and Meta's _Rule of Two_: never allow **untrusted content + private data + an exfiltration channel** to coexist unsupervised in one step.
 
 Five layers, all on by default:
 
 ### 7.1 Trust boundary (content tagging)
+
 All page-derived text enters the model wrapped and labeled as **untrusted data, not instructions**. The system prompt establishes that content inside the untrusted envelope can never issue commands, change the goal, or request navigation to new origins. Extracted/cached content is sanitized (strip instruction-like imperatives, hidden text, zero-width chars) before it ever reaches the Planner.
 
 ### 7.2 Alignment critic
-Before any **state-changing** action executes, a second, independent model pass asks: *"Does this action serve the user's original stated intent, or does it appear induced by page content?"* Misaligned actions are blocked and surfaced to the user. This is cheap insurance against injected sub-goals.
+
+Before any **state-changing** action executes, a second, independent model pass asks: _"Does this action serve the user's original stated intent, or does it appear induced by page content?"_ Misaligned actions are blocked and surfaced to the user. This is cheap insurance against injected sub-goals.
 
 ### 7.3 Mandatory confirmation for state-changing actions
+
 The policy engine classifies every proposed action. Anything irreversible/consequential **pauses for explicit human approval** with a plain-language preview ("Submit application to X?"). Read-only actions flow through freely.
 
 ```ts
-type ActionRisk = "read" | "navigate" | "input" | "state_changing";
+type ActionRisk = 'read' | 'navigate' | 'input' | 'state_changing';
 // state_changing => ALWAYS confirm in MVP:
 const STATE_CHANGING = [
-  "purchase", "checkout", "send_message", "send_email", "post_content",
-  "delete", "transfer_funds", "submit_form_with_side_effects",
-  "enter_credentials", "grant_permission", "change_account_settings"
+  'purchase',
+  'checkout',
+  'send_message',
+  'send_email',
+  'post_content',
+  'delete',
+  'transfer_funds',
+  'submit_form_with_side_effects',
+  'enter_credentials',
+  'grant_permission',
+  'change_account_settings',
 ];
 ```
 
 ### 7.4 Secret vault + native fill (no creds in prompt)
+
 Credentials live in a **WebCrypto-encrypted vault** (key derived from a user passphrase; secrets never serialized to the model). When a login is needed, Aegis fills fields via native input events — the model sees `‹secret:github_password›` placeholders, never the value. 2FA/MFA always hands off to the human.
 
 ### 7.5 Per-site permissions & isolation
+
 - Every origin has a policy: `ask` (default) / `allow` / `deny`, plus an `allowStateChanging` flag.
 - A hard **deny-list** for high-risk domains (banking, gov, adult) unless the user explicitly opts in.
 - Optional **isolated profile mode**: run agent tasks in a dedicated browser profile so the agent's session is scoped away from the user's primary logins.
@@ -247,9 +256,9 @@ Credentials live in a **WebCrypto-encrypted vault** (key derived from a user pas
 ```ts
 interface SitePolicy {
   origin: string;
-  mode: "ask" | "allow" | "deny";
+  mode: 'ask' | 'allow' | 'deny';
   allowStateChanging: boolean;
-  expiresAt?: number;      // "allow for this session"
+  expiresAt?: number; // "allow for this session"
 }
 ```
 
@@ -289,12 +298,12 @@ sequenceDiagram
 
 ---
 
-## 9. Trust-UX: the four surfaces that *are* the product
+## 9. Trust-UX: the four surfaces that _are_ the product
 
 These aren't decoration — they're the reason a user trusts Aegis over a free AI-native browser.
 
 1. **Confirmation gate.** A clear modal: the action, its target, a human-readable preview, and Approve / Edit / Reject. Never a generic "allow?" — always specific ("Send email to jane@acme.com?").
-2. **Action trace / log.** A live, replayable, step-by-step timeline: each step shows the agent's reasoning, the action, the target element, and the result. Expandable to raw perception for debugging. This makes non-determinism *auditable*.
+2. **Action trace / log.** A live, replayable, step-by-step timeline: each step shows the agent's reasoning, the action, the target element, and the result. Expandable to raw perception for debugging. This makes non-determinism _auditable_.
 3. **Permissions panel.** Per-site policy at a glance; one click to allow/deny/scope; visible deny-list.
 4. **Secret vault.** Add/remove credentials, see where each is used, everything encrypted. A "the agent never sees this value" affordance.
 
@@ -304,33 +313,33 @@ Plus a persistent **Stop/Pause** and a post-run summary. (Wireframes to follow i
 
 ## 10. Data & storage
 
-| Data | Store | Notes |
-|---|---|---|
-| Model/provider config, API keys | `chrome.storage.local` | Keys encrypted at rest via vault key |
-| Secret vault (credentials) | `chrome.storage.local` + WebCrypto | AES-GCM; key derived from user passphrase (PBKDF2) |
-| Per-site policies | `chrome.storage.local` | User-editable |
-| Loop state (resume) | `chrome.storage.session` | Written every transition; cleared on completion |
-| Task history / traces | `chrome.storage.local` (opt-in cap) | Local only; user can purge |
-| Diagnostics | off by default | Opt-in, local-only; no remote telemetry in MVP |
+| Data                            | Store                               | Notes                                              |
+| ------------------------------- | ----------------------------------- | -------------------------------------------------- |
+| Model/provider config, API keys | `chrome.storage.local`              | Keys encrypted at rest via vault key               |
+| Secret vault (credentials)      | `chrome.storage.local` + WebCrypto  | AES-GCM; key derived from user passphrase (PBKDF2) |
+| Per-site policies               | `chrome.storage.local`              | User-editable                                      |
+| Loop state (resume)             | `chrome.storage.session`            | Written every transition; cleared on completion    |
+| Task history / traces           | `chrome.storage.local` (opt-in cap) | Local only; user can purge                         |
+| Diagnostics                     | off by default                      | Opt-in, local-only; no remote telemetry in MVP     |
 
 ---
 
 ## 11. Tech stack & repo structure
 
-| Layer | Choice |
-|---|---|
-| Extension framework | **WXT** (MV3, Vite, cross-browser) |
-| Language | **TypeScript** |
-| UI | **React + Tailwind + shadcn/ui** |
-| Agent loop | **XState** (resumable state machine) |
-| Model + tools | **Vercel AI SDK v6/7** (BYOK) |
-| Schemas / validation | **Zod** + JSON-repair fallback |
-| Perception / control | **chrome.debugger → CDP** (AX tree, DOM, screenshot) + content-script fast path |
-| Security | **WebCrypto** vault, content trust-tagging, alignment critic |
-| Extensibility (Phase 2) | Official **@modelcontextprotocol** client + WebMCP fast-path |
-| UI state | **Zustand** |
-| Testing | **Vitest** + **Playwright** + reliability **eval harness** |
-| Repo | **pnpm + Turbo** monorepo |
+| Layer                   | Choice                                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| Extension framework     | **WXT** (MV3, Vite, cross-browser)                                                                    |
+| Language                | **TypeScript**                                                                                        |
+| UI                      | **React + Tailwind + shadcn/ui**                                                                      |
+| Agent loop              | **XState** (resumable state machine)                                                                  |
+| Model + tools           | **Vercel AI SDK v6/7** (BYOK)                                                                         |
+| Schemas / validation    | **Zod** + JSON-repair fallback                                                                        |
+| Perception / control    | **chrome.debugger → CDP** (AX tree, DOM, screenshot) — no content-script fast path in v0.1.0; see §14 |
+| Security                | **WebCrypto** vault, content trust-tagging, alignment critic                                          |
+| Extensibility (Phase 2) | Official **@modelcontextprotocol** client + WebMCP fast-path                                          |
+| UI state                | **Zustand**                                                                                           |
+| Testing                 | **Vitest** + **Playwright** + reliability **eval harness**                                            |
+| Repo                    | **pnpm + Turbo** monorepo                                                                             |
 
 ```
 aegis/
@@ -338,9 +347,10 @@ aegis/
 │  ├─ entrypoints/
 │  │  ├─ background.ts       # orchestrator: XState loop + CDP session
 │  │  ├─ sidepanel/          # React chat, trace, confirm gate
-│  │  ├─ options/            # models, vault, permissions
-│  │  └─ content.ts          # lightweight DOM ops / highlights
+│  │  └─ options/            # models, vault, permissions
 ├─ packages/
+│  ├─ eval-harness/          # shared E2E/eval infra: extension launcher, fake model
+│  │                         # server, fixtures + scenarios (used by both E2E and evals/)
 │  ├─ agent/                 # loop machine, planner, navigator, verifier, critic
 │  ├─ perception/            # AX-tree + DOM + vision pipeline, normalizer
 │  ├─ actions/               # action schemas + CDP executors
@@ -358,53 +368,57 @@ aegis/
 
 - **Unit (Vitest):** perception normalizer, action classifier, security policy engine, JSON-repair.
 - **E2E (Playwright):** run the extension against a set of fixture sites + a handful of live sites; assert task outcomes and that confirmations fire.
-- **Reliability eval harness (the differentiator):** a versioned task set (seeded from the §3 use cases, grown toward Online-Mind2Web-style live tasks) with human-judged success. Runs on every release; a regression blocks the release. This is how we make "more reliable than Nanobrowser" a *number*, not a claim.
+- **Reliability eval harness (the differentiator):** a versioned task set (seeded from the §3 use cases, grown toward Online-Mind2Web-style live tasks) with human-judged success. Runs on every release; a regression blocks the release. This is how we make "more reliable than Nanobrowser" a _number_, not a claim.
 - **Security suite:** a corpus of indirect-prompt-injection pages (hidden instructions, spoofed CAPTCHAs, malicious URLs); assert zero exfiltration and zero unauthorized state-change.
 
 ---
 
 ## 13. Build plan / milestones
 
-| Phase | Deliverable | Exit criteria |
-|---|---|---|
+| Phase                     | Deliverable                                                                                                    | Exit criteria                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | **0 — Spike** (throwaway) | Drive one real site end-to-end via CDP AX-tree perception + AI SDK tool-calling with a hard human-confirm gate | Proves the perception→action→confirm loop works; informs the real interfaces |
-| **1 — Core loop** | WXT scaffold, XState loop, Planner/Navigator, perception pipeline, action executors | Completes read-only use cases (1,2,4) reliably |
-| **2 — Security core** | Policy engine, confirmation gate, alignment critic, content trust-tagging, secret vault | Use case 3 gated correctly; passes baseline injection suite |
-| **3 — Trust UX + evals** | Action trace, permissions panel, vault UI, eval harness wired to CI | Beats Nanobrowser baseline on the eval set; ship v0.1 (Chrome+Edge) |
-| **Phase 2 (post-MVP)** | MCP client + WebMCP fast-path | Agent can call declared site/tool APIs |
-| **Phase 3 (post-MVP)** | Record→compile self-healing workflows + scheduled runs | Reusable, deterministic automations |
+| **1 — Core loop**         | WXT scaffold, XState loop, Planner/Navigator, perception pipeline, action executors                            | Completes read-only use cases (1,2,4) reliably                               |
+| **2 — Security core**     | Policy engine, confirmation gate, alignment critic, content trust-tagging, secret vault                        | Use case 3 gated correctly; passes baseline injection suite                  |
+| **3 — Trust UX + evals**  | Action trace, permissions panel, vault UI, eval harness wired to CI                                            | Beats Nanobrowser baseline on the eval set; ship v0.1 (Chrome+Edge)          |
+| **Phase 2 (post-MVP)**    | MCP client + WebMCP fast-path                                                                                  | Agent can call declared site/tool APIs                                       |
+| **Phase 3 (post-MVP)**    | Record→compile self-healing workflows + scheduled runs                                                         | Reusable, deterministic automations                                          |
 
 ---
 
 ## 14. Risks & open questions
 
-- **`chrome.debugger` banner UX.** The "started debugging this browser" bar is unavoidable when attached. Mitigation: content-script fast path for cheap ops; attach CDP only when needed; consider an isolated profile. *Open: how much of the loop can run without attaching?*
-- **Confirmation fatigue.** Too many gates and users disable safety. Mitigation: precise classification, per-site `allow` scoping, batch-preview multi-step forms. *Open: the right default granularity.*
-- **Reliability ceiling is real.** Even frontier agents sit well under 100% on live multi-step tasks. We compete on *relative* reliability + honesty, not magic. The verifier + evals are the levers.
+- **`chrome.debugger` banner UX.** The "started debugging this browser" bar is unavoidable when attached. **Resolved for v0.1.0**: no content-script fast path was built — every perception/action goes through CDP exclusively (see `apps/extension/README.md`'s "Note on `chrome.debugger`"), accepting the banner as expected behavior rather than partially avoiding it with a second code path to maintain. Revisit if the banner proves to be a real adoption blocker.
+- **Confirmation fatigue.** Too many gates and users disable safety. Mitigation: precise classification, per-site `allow` scoping, batch-preview multi-step forms. _Open: the right default granularity._
+- **Reliability ceiling is real.** Even frontier agents sit well under 100% on live multi-step tasks. We compete on _relative_ reliability + honesty, not magic. The verifier + evals are the levers.
 - **Vision-fallback cost.** Keep it a genuine fallback; measure how often it triggers.
 - **Solo-maintainer risk (the thing that's hurting Nanobrowser).** Keep the core small, typed, and well-tested; make packages independently ownable; write the eval harness early so contributors can change code safely.
 - **WebMCP timing.** Origin trial mid-2026, mass adoption ~2027 — correct to treat as an opportunistic fast-path, not a dependency.
 
 ---
 
-## 15. What makes this *not* just a better Nanobrowser
+## 15. What makes this _not_ just a better Nanobrowser
 
 Every core choice ties to a specific, verified Nanobrowser weakness:
 
-| Nanobrowser weakness | Aegis answer |
-|---|---|
-| Index-only perception (misses canvas/icons/shadow DOM) | Hybrid AX-tree + DOM + vision fallback with stable refs |
-| `extractContent` disabled → token blow-up | Re-enabled, budgeted extraction + history compression |
-| Structured-output parsing breaks across providers | Zod + `generateObject` + JSON-repair fallback |
-| "Lightweight" guardrails vs. prompt injection | 5-layer security core, on by default |
-| Credentials flow into the prompt | WebCrypto vault + native fill; model never sees secrets |
-| No verification → compounding error / loops | Verifier step + stall detector |
-| No human gate on risky actions | Mandatory confirmation for all state-changing actions |
-| Chrome/Edge only | WXT cross-browser |
-| Reliability is unmeasured ("use a smarter model") | Eval harness gates every release |
-| No tools / MCP / API | MCP + WebMCP designed in as Phase 2 |
-| Single-maintainer, stalling | Small typed core + early evals so others can contribute safely |
+| Nanobrowser weakness                                   | Aegis answer                                                   |
+| ------------------------------------------------------ | -------------------------------------------------------------- |
+| Index-only perception (misses canvas/icons/shadow DOM) | Hybrid AX-tree + DOM + vision fallback with stable refs        |
+| `extractContent` disabled → token blow-up              | Re-enabled, budgeted extraction + history compression          |
+| Structured-output parsing breaks across providers      | Zod + `generateObject` + JSON-repair fallback                  |
+| "Lightweight" guardrails vs. prompt injection          | 5-layer security core, on by default                           |
+| Credentials flow into the prompt                       | WebCrypto vault + native fill; model never sees secrets        |
+| No verification → compounding error / loops            | Verifier step + stall detector                                 |
+| No human gate on risky actions                         | Mandatory confirmation for all state-changing actions          |
+| Chrome/Edge only                                       | WXT cross-browser                                              |
+| Reliability is unmeasured ("use a smarter model")      | Eval harness gates every release                               |
+| No tools / MCP / API                                   | MCP + WebMCP designed in as Phase 2                            |
+| Single-maintainer, stalling                            | Small typed core + early evals so others can contribute safely |
 
 ---
 
-*End of design draft v0.1. Next artifact on approval: the Phase 0 spike scaffold (WXT project + a vertical slice proving CDP perception + tool-calling + the confirmation gate on one real site).*
+_End of design draft. All phases through "3 — Trust UX + evals" above shipped as v0.1.0 —
+see `PROGRESS.md`'s milestone checklist and ADR log for the 35 issues that implemented
+this design, including where implementation surfaced real decisions this draft didn't
+anticipate. Phase 2 (MCP/WebMCP) and Phase 3 (record→compile workflows) remain
+post-MVP, not yet started._
