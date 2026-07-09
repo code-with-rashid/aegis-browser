@@ -47,3 +47,11 @@ export type { BuildPlannerPromptOptions } from './planner/prompt';
 export { PLANNER_SYSTEM_PROMPT, buildPlannerPrompt } from './planner/prompt';
 export type { CreatePlannerServiceOptions } from './planner/create-planner-service';
 export { createPlannerService } from './planner/create-planner-service';
+
+export type { NavigatorLlmOutput } from './navigator/schema';
+export { NavigatorOutputSchema } from './navigator/schema';
+export type { BuildNavigatorPromptOptions } from './navigator/prompt';
+export { NAVIGATOR_SYSTEM_PROMPT, buildNavigatorPrompt } from './navigator/prompt';
+export { findHallucinatedRefs } from './navigator/hallucinated-refs';
+export type { CreateNavigatorServiceOptions } from './navigator/create-navigator-service';
+export { createNavigatorService } from './navigator/create-navigator-service';
