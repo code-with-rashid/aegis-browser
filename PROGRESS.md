@@ -57,7 +57,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #27 Confirmation gate UI — blocked by: #25, #22
 - [x] #28 Options — models & keys — blocked by: #25, #6
 - [x] #29 Options — permissions panel — blocked by: #25, #21
-- [ ] #30 Options — secret vault UI — blocked by: #25, #24
+- [x] #30 Options — secret vault UI — blocked by: #25, #24
 
 ### M7 — Integration, evals, release
 
@@ -133,6 +133,11 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   `PolicyStore` (unlike #28's untested `App.tsx` orchestration) since #29's acceptance
   criteria explicitly requires tests; per-row auto-save, no page-level Save button, since
   each origin's policy is independent; deny-list view is read-only.
+- [0018](docs/adr/0018-options-secret-vault-ui.md) — Options secret vault UI: "show where
+  used" means the `‹secret:name›` placeholder token (with Copy), not a usage log —
+  nothing in `@aegis/agent` associates a secret with a site or run; `SecretVaultPanel`
+  takes an injected `SecretVault`, tested against a real `createMemoryStorage()`-backed
+  vault; no reveal for an existing secret's value, re-adding a name overwrites it.
 
 ## Notes
 
