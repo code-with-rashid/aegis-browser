@@ -32,7 +32,7 @@ function mockServices(overrides: Partial<LoopServices> = {}): LoopServices {
     perceive: () => Promise.resolve(ok(perceptionFixture())),
     plan: () => Promise.resolve(ok({ subGoal: 'do the thing', taskComplete: false })),
     decide: () => Promise.resolve(ok({ actions: [], stuck: false })),
-    checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: true })),
+    checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
     act: () => Promise.resolve({ kind: 'completed', results: [] }),
     verify: () => Promise.resolve(ok({ outcome: 'achieved', taskComplete: true })),
     ...overrides,

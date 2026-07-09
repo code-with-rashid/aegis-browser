@@ -3,6 +3,7 @@ import type { CdpError, PerceptionPayload } from '@aegis/perception';
 import { isErr, type Result } from '@aegis/shared';
 import { assign, fromPromise, setup } from 'xstate';
 
+import { buildConfirmationRequest, type ConfirmationRequest } from './confirmation';
 import type { AgentError } from './errors';
 import { summarizeRunOutcome, type RunSummary } from './run-summary';
 import type {
@@ -62,6 +63,8 @@ export interface AgentLoopContext {
   readonly lastRunSummary: RunSummary | undefined;
   readonly lastError: LoopErrorSummary | undefined;
   readonly taskSummary: string | undefined;
+  /** The actions currently awaiting human approval — set on entering `confirming`. */
+  readonly pendingConfirmation: ConfirmationRequest | undefined;
 }
 
 export type AgentLoopEvent =
@@ -69,7 +72,8 @@ export type AgentLoopEvent =
   | { type: 'PAUSE' }
   | { type: 'RESUME' }
   | { type: 'APPROVE' }
-  | { type: 'REJECT' };
+  | { type: 'REJECT' }
+  | { type: 'EDIT'; actions: readonly Action[] };
 
 /**
  * Builds the agent loop state machine (`docs/DESIGN.md` §5), closing over `services`
@@ -127,6 +131,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       lastRunSummary: undefined,
       lastError: undefined,
       taskSummary: undefined,
+      pendingConfirmation: undefined,
     }),
     initial: 'planning',
     states: {
@@ -270,8 +275,32 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
               }),
             },
             {
-              guard: ({ event }) => !isErr(event.output) && event.output.value.requiresConfirmation,
+              guard: ({ event }) => !isErr(event.output) && event.output.value.decision === 'deny',
+              target: 'replanning',
+              actions: assign({
+                lastError: ({ event }) =>
+                  !isErr(event.output)
+                    ? {
+                        code: 'POLICY_DENIED',
+                        message: event.output.value.reason ?? 'Policy denied this action',
+                      }
+                    : undefined,
+              }),
+            },
+            {
+              guard: ({ event }) =>
+                !isErr(event.output) && event.output.value.decision === 'confirm',
               target: 'confirming',
+              actions: assign({
+                pendingConfirmation: ({ context, event }) =>
+                  !isErr(event.output)
+                    ? buildConfirmationRequest(
+                        context.proposedActions,
+                        context.perception,
+                        event.output.value.reason,
+                      )
+                    : undefined,
+              }),
             },
             { target: 'actingGate' },
           ],
@@ -290,8 +319,26 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
 
       confirming: {
         on: {
-          APPROVE: 'actingGate',
-          REJECT: 'replanning',
+          APPROVE: {
+            target: 'actingGate',
+            actions: assign({ pendingConfirmation: () => undefined }),
+          },
+          REJECT: {
+            target: 'replanning',
+            actions: assign({ pendingConfirmation: () => undefined }),
+          },
+          EDIT: {
+            target: 'confirming',
+            actions: assign({
+              proposedActions: ({ event }) => event.actions,
+              pendingConfirmation: ({ context, event }) =>
+                buildConfirmationRequest(
+                  event.actions,
+                  context.perception,
+                  context.pendingConfirmation?.reason,
+                ),
+            }),
+          },
           STOP: 'stopped',
         },
       },

@@ -18,6 +18,7 @@ function contextFixture(overrides: Partial<AgentLoopContext> = {}): AgentLoopCon
     lastRunSummary: undefined,
     lastError: undefined,
     taskSummary: undefined,
+    pendingConfirmation: undefined,
     ...overrides,
   };
 }

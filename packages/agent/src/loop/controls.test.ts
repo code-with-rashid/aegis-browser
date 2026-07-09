@@ -1,7 +1,8 @@
+import { toElementRef } from '@aegis/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentLoopEvent } from './machine';
-import { approveLoop, pauseLoop, rejectLoop, resumeLoop, stopLoop } from './controls';
+import { approveLoop, editLoop, pauseLoop, rejectLoop, resumeLoop, stopLoop } from './controls';
 
 function fakeHandle() {
   return { send: vi.fn<(event: AgentLoopEvent) => void>() };
@@ -36,5 +37,12 @@ describe('loop controls', () => {
     const actor = fakeHandle();
     rejectLoop(actor);
     expect(actor.send).toHaveBeenCalledWith({ type: 'REJECT' });
+  });
+
+  it('editLoop sends EDIT with the revised actions', () => {
+    const actor = fakeHandle();
+    const actions = [{ type: 'click' as const, ref: toElementRef('ax:1') }];
+    editLoop(actor, actions);
+    expect(actor.send).toHaveBeenCalledWith({ type: 'EDIT', actions });
   });
 });
