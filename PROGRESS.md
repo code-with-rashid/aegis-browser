@@ -52,7 +52,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M6 — UI
 
-- [ ] #25 Side panel shell & messaging bridge — blocked by: #3, #19
+- [x] #25 Side panel shell & messaging bridge — blocked by: #3, #19
 - [ ] #26 Action trace / log UI — blocked by: #25, #15
 - [ ] #27 Confirmation gate UI — blocked by: #25, #22
 - [ ] #28 Options — models & keys — blocked by: #25, #6
@@ -110,6 +110,11 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   an empty vault; placeholder resolution lives in `@aegis/security` (not
   `@aegis/actions`, wrong layering direction), as a pre-processing step before an action
   reaches the existing CDP executors.
+- [0013](docs/adr/0013-side-panel-composition-root.md) — Side panel composition root:
+  a `createPolicyService` adapter bridges `@aegis/security`'s per-action `PolicyEngine`
+  to `@aegis/agent`'s per-batch `PolicyService`; two storage areas (session for loop
+  state, local for durable config); one active run at a time with rehydration on
+  startup; `LoopRunOutcome` gains `paused` so the UI can distinguish it from `active`.
 
 ## Notes
 

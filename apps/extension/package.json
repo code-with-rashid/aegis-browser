@@ -12,26 +12,36 @@
     "zip": "wxt zip",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
+    "@aegis/actions": "workspace:*",
+    "@aegis/agent": "workspace:*",
+    "@aegis/llm": "workspace:*",
+    "@aegis/perception": "workspace:*",
+    "@aegis/security": "workspace:*",
     "@aegis/shared": "workspace:*",
     "@radix-ui/react-slot": "^1.1.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tailwind-merge": "^2.5.2"
+    "tailwind-merge": "^2.5.2",
+    "xstate": "^5.32.4",
+    "zustand": "^5.0.1"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.280",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "@wxt-dev/module-react": "^1.1.0",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.10",
     "typescript": "^5.6.0",
+    "vitest": "^4.1.10",
     "wxt": "^0.20.0"
   }
 }

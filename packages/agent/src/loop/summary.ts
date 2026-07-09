@@ -1,6 +1,6 @@
 import type { AgentLoopContext, LoopErrorSummary } from './machine';
 
-export type LoopRunOutcome = 'done' | 'failed' | 'stopped' | 'active';
+export type LoopRunOutcome = 'done' | 'failed' | 'stopped' | 'paused' | 'active';
 
 /** A plain-data report of one loop run — for the trace UI (#26), logs, or a final "here's what happened" message. */
 export interface LoopRunSummary {
@@ -19,10 +19,11 @@ export interface LoopSnapshotLike {
   readonly context: AgentLoopContext;
 }
 
-const TERMINAL_STATE_VALUES: ReadonlySet<unknown> = new Set(['done', 'failed', 'stopped']);
+/** State values `summarizeLoopRun` reports verbatim as the outcome — everything else means "actively working," reported as `'active'`. */
+const NAMED_STATE_VALUES: ReadonlySet<unknown> = new Set(['done', 'failed', 'stopped', 'paused']);
 
 function outcomeOf(value: unknown): LoopRunOutcome {
-  return TERMINAL_STATE_VALUES.has(value) ? (value as LoopRunOutcome) : 'active';
+  return NAMED_STATE_VALUES.has(value) ? (value as LoopRunOutcome) : 'active';
 }
 
 /**
