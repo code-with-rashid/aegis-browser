@@ -236,3 +236,5 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   via a follow-up live-model eval re-run after #73 — see ADR 0026.
 - Post-release: issue #77 (Navigator overall-task context) found via repeated
   follow-up live-model eval re-runs after #75 — see ADR 0027.
+- v0.1.1 (2026-07-10): patch release bundling the four post-release reliability fixes
+  above (#71, #73, #75, #77). See `CHANGELOG.md` and the `v0.1.1` tag.

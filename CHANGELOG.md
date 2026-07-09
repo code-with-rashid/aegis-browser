@@ -3,6 +3,36 @@
 All notable changes to this project are documented in this file. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.1] — 2026-07-10
+
+Reliability fixes found by running the eval harness (`evals/`) in live mode against a
+real model (`gpt-4o-mini`) instead of only the scripted mock suite. No new features; the
+four issues below were the actual, reproducible root causes behind the flaky/failing runs
+this surfaced. Full rationale for each in `docs/adr/`.
+
+### Fixed
+
+- Navigator/Planner element-ref prompt format was ambiguous (`- [el:3] textbox "..."`) —
+  a real model reliably copied the brackets into the ref itself, causing hallucinated-ref
+  corrections it didn't always self-fix. Changed to a labeled, quoted format
+  (`ref="el:3" role="..." name="..."`) with no delimiter character to fold in.
+  (`docs/adr/0024`)
+- The DOM-based interactive pruner never filtered hidden elements, so an element hidden
+  by its own click handler (click-to-reveal, submit-to-hide-form) kept being offered to
+  the Navigator, which re-proposed the same already-executed action against it —
+  producing a CDP click failure and wasted verification steps. Fixed by skipping a hidden
+  element's entire subtree while walking the DOM. (`docs/adr/0025`)
+- `input_text` inserted text via CDP without clearing existing field content first, so a
+  retried or replanned `input_text` against the same field appended instead of
+  overwriting — once a model mistyped a value, the field could never again hold exactly
+  the intended text. Fixed by selecting all existing content before inserting.
+  (`docs/adr/0026`)
+- The Navigator's prompt only ever included the Planner's paraphrased sub-goal, never the
+  original task — when a paraphrase dropped a literal value (e.g. a code, a search term)
+  the sub-goal needed, the Navigator had no way to recover it and fabricated a
+  placeholder instead. Fixed by threading the overall task through to the Navigator's
+  prompt. (`docs/adr/0027`)
+
 ## [0.1.0] — 2026-07-09
 
 Initial release. Every milestone in `PROGRESS.md` (M0–M7, issues #1–#35) is implemented,
@@ -54,4 +84,5 @@ ADRs).
   literally named "Buy Now") could never actually trigger in the real running system.
   Fixed by threading perception through the `policyCheck` state (`docs/adr/0020`).
 
+[0.1.1]: https://github.com/code-with-rashid/aegis-browser/releases/tag/v0.1.1
 [0.1.0]: https://github.com/code-with-rashid/aegis-browser/releases/tag/v0.1.0
