@@ -79,4 +79,31 @@ machine reads; the rest rides along for the trace UI (#26). Any failure (provide
 resolution, or `generateStructured` exhausting its retries) becomes a `PLANNER_FAILED`
 `AgentError` with the original error as `cause`.
 
+## The Navigator
+
+`createNavigatorService(modelRouter, options?)` (`navigator/create-navigator-service.ts`)
+builds the `NavigatorService` the loop machine invokes in `deciding`. It resolves the
+`navigator` role's model (low default temperature — narrow, low-variance choices, not
+open-ended reasoning) and calls `generateStructured` with `NavigatorOutputSchema`
+(`navigator/schema.ts`) — §5's `AgentBrain` shape with `actions` (not `plan`).
+
+`actions` validates against `LlmActionSchema` (`navigator/llm-action-schema.ts`), a
+transform-free mirror of `@aegis/actions`' `ActionSchema` — see
+`docs/adr/0006-navigator-llm-action-schema-mirror.md` for why a mirror is needed at all
+(Zod's `z.toJSONSchema`, which `generateStructured` uses to build format instructions,
+can't represent the `.transform()` that brands `ref` as an `ElementRef`). Once
+`generateStructured` succeeds, the raw actions are re-parsed through the real
+`ActionSchema` to get properly-branded `Action`s.
+
+`findHallucinatedRefs` (`navigator/hallucinated-refs.ts`) then checks every action's
+`ref` (where one applies — `click`/`input_text`/`get_dropdown_options`/
+`select_dropdown_option` always; `scroll`/`send_keys` when given) against
+`perception.elements`. A schema-valid action referencing a ref the page never actually
+had is a hallucination, not a formatting error — `generateStructured`'s own retry can't
+catch it. The Navigator gets its own bounded retry loop on top: a hallucination triggers
+one corrective re-prompt (telling the model exactly which refs were invalid), and if it
+still can't self-correct, the decision resolves as `{ actions: [], stuck: true }` —
+`stuck`, not a hard failure, so the loop replans instead of aborting the whole task over
+a model that got confused.
+
 Depends on `@aegis/actions`, `@aegis/llm`, `@aegis/perception`, `@aegis/shared`.

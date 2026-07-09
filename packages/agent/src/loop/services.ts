@@ -55,6 +55,10 @@ export interface DecideOutput {
   readonly actions: readonly Action[];
   /** True when the navigator can't find an actionable next step — triggers a replan. */
   readonly stuck: boolean;
+  /** The navigator's observation/reasoning/memory — for the trace UI (#26); the machine only reads the fields above. */
+  readonly observation?: string;
+  readonly reasoning?: string;
+  readonly memory?: string;
 }
 export type NavigatorService = (input: DecideInput) => Promise<Result<DecideOutput, AgentError>>;
 
