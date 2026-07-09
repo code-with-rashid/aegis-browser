@@ -23,8 +23,10 @@ a mocked `LoopServices`):
 
 - `perceive`/`act` wrap the already-built perception (#10) and action-runner (#14)
   pipelines.
-- `plan`/`decide`/`checkPolicy`/`verify` are ports the real Planner (#16), Navigator
-  (#17), policy engine (#21), and Verifier (#18) will implement.
+- `plan`/`decide`/`verify` are ports the real Planner (#16), Navigator (#17), and
+  Verifier (#18) implement. `checkPolicy` (#22) is the same shape, but its real adapter —
+  backed by `@aegis/security`'s policy engine (#21) — is composition-root work; see
+  "Confirmation gate" below.
 
 `executorContext: ExecutorContext` (the live `CdpSession` + `TabManager` from
 `@aegis/actions`) is closed over by the same factory call, not threaded through machine
@@ -32,7 +34,32 @@ context — it's the one thing that's fixed for a run's lifetime but isn't itsel
 "service."
 
 Events: `STOP` (from any active state, to `stopped`), `PAUSE`/`RESUME` (around
-`perceiving`/`paused`), `APPROVE`/`REJECT` (from `confirming`).
+`perceiving`/`paused`), `APPROVE`/`REJECT`/`EDIT` (from `confirming`).
+
+## Confirmation gate
+
+`PolicyCheckOutput.decision` (`loop/services.ts`) is three-way: `'allow'` proceeds
+straight to `actingGate`; `'deny'` (a hard policy block, e.g. a deny-listed origin) routes
+to `replanning` — no human can override it from inside the loop, but the task may still be
+achievable a different way, bounded as ever by the replan budget; `'confirm'` suspends the
+loop in `confirming` and sets `context.pendingConfirmation`. See
+`docs/adr/0010-confirmation-gate.md` for the full reasoning, including why this stays a
+local, structurally-identical type rather than importing `@aegis/security`'s
+`PolicyDecision` (the sibling-package boundary from #20 holds here too — the real
+`PolicyService` backed by `@aegis/security`'s policy engine is composition-root work, not
+built in `@aegis/agent`).
+
+`buildConfirmationRequest`/`describeAction` (`loop/confirmation.ts`) turn the pending
+actions into a `ConfirmationRequest {actions, preview, reason?}` — one human-readable line
+per action (e.g. `Click "Submit Order"`), built by matching each action's `ref` against
+`context.perception.elements` for its real accessible name. This is what a confirmation
+UI (#27) renders instead of raw action JSON.
+
+From `confirming`: `APPROVE` clears `pendingConfirmation` and proceeds to `actingGate`;
+`REJECT` clears it and replans; `EDIT {actions}` replaces `proposedActions`, rebuilds the
+preview, and stays in `confirming` — a human can revise a proposed action without it ever
+executing unsupervised. `loop/controls.ts` exposes all three as `approveLoop`/
+`rejectLoop`/`editLoop`.
 
 ## Guardrails & controls
 

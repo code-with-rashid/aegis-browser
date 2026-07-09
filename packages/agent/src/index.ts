@@ -13,6 +13,7 @@ export type {
   NavigatorService,
   PolicyCheckInput,
   PolicyCheckOutput,
+  PolicyDecision,
   PolicyService,
   ActService,
   VerifyInput,
@@ -32,6 +33,9 @@ export type {
 } from './loop/machine';
 export { createAgentLoopMachine, DEFAULT_MAX_STEPS, DEFAULT_MAX_REPLANS } from './loop/machine';
 
+export type { ConfirmationRequest } from './loop/confirmation';
+export { buildConfirmationRequest, describeAction } from './loop/confirmation';
+
 export type { PersistableActor } from './loop/persistence';
 export {
   persistAgentLoopOnTransition,
@@ -40,7 +44,14 @@ export {
 } from './loop/persistence';
 
 export type { LoopControlHandle } from './loop/controls';
-export { stopLoop, pauseLoop, resumeLoop, approveLoop, rejectLoop } from './loop/controls';
+export {
+  stopLoop,
+  pauseLoop,
+  resumeLoop,
+  approveLoop,
+  rejectLoop,
+  editLoop,
+} from './loop/controls';
 
 export type { LoopRunOutcome, LoopRunSummary, LoopSnapshotLike } from './loop/summary';
 export { summarizeLoopRun } from './loop/summary';

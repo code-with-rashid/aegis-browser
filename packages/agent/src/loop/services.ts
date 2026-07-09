@@ -73,8 +73,15 @@ export type NavigatorService = (
 export interface PolicyCheckInput {
   readonly actions: readonly Action[];
 }
+/**
+ * `allow`: run the actions unsupervised. `confirm`: suspend the loop and ask the human
+ * (`docs/adr/0010-confirmation-gate.md`). `deny`: the policy engine (`@aegis/security`,
+ * #21) blocked this outright (e.g. a hard deny-listed origin) — no human can override it
+ * from inside the loop, so the machine replans instead of asking.
+ */
+export type PolicyDecision = 'allow' | 'confirm' | 'deny';
 export interface PolicyCheckOutput {
-  readonly requiresConfirmation: boolean;
+  readonly decision: PolicyDecision;
   readonly reason?: string;
 }
 export type PolicyService = (

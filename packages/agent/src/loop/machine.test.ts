@@ -32,7 +32,7 @@ function mockServices(overrides: Partial<LoopServices> = {}): LoopServices {
       Promise.resolve(
         ok({ actions: [{ type: 'click', ref: toElementRef('ax:1') }], stuck: false }),
       ),
-    checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: false })),
+    checkPolicy: () => Promise.resolve(ok({ decision: 'allow' })),
     act: () => Promise.resolve({ kind: 'completed', results: [] }),
     verify: () => Promise.resolve(ok({ outcome: 'achieved', taskComplete: true })),
     ...overrides,
@@ -72,7 +72,7 @@ describe('agent loop machine', () => {
 
   it('routes a state-changing action through confirming, and APPROVE resumes to acting', async () => {
     const services = mockServices({
-      checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: true })),
+      checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
     });
     const machine = createAgentLoopMachine(services, testExecutorContext());
     const actor = createActor(machine, { input: { task: 'Delete account', tabId: 1 } });
@@ -82,17 +82,60 @@ describe('agent loop machine', () => {
       timeout: WAIT_TIMEOUT,
     });
     expect(confirmingSnapshot.value).toBe('confirming');
+    expect(confirmingSnapshot.context.pendingConfirmation?.actions).toEqual([
+      { type: 'click', ref: toElementRef('ax:1') },
+    ]);
+    expect(confirmingSnapshot.context.pendingConfirmation?.preview).toEqual(['Click "ax:1"']);
 
     actor.send({ type: 'APPROVE' });
     const finalSnapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
 
+    expect(finalSnapshot.value).toBe('done');
+    expect(finalSnapshot.context.pendingConfirmation).toBeUndefined();
+  });
+
+  it("includes the policy engine's reason in the confirmation request", async () => {
+    const services = mockServices({
+      checkPolicy: () =>
+        Promise.resolve(ok({ decision: 'confirm', reason: 'Submit Order is state-changing' })),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, (s) => s.value === 'confirming', {
+      timeout: WAIT_TIMEOUT,
+    });
+    expect(snapshot.context.pendingConfirmation?.reason).toBe('Submit Order is state-changing');
+  });
+
+  it('lets EDIT revise the pending actions while still awaiting a decision', async () => {
+    const services = mockServices({
+      checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Delete account', tabId: 1 } });
+    actor.start();
+
+    await waitFor(actor, (s) => s.value === 'confirming', { timeout: WAIT_TIMEOUT });
+
+    const editedActions = [{ type: 'input_text' as const, ref: toElementRef('ax:2'), text: 'ok' }];
+    actor.send({ type: 'EDIT', actions: editedActions });
+
+    const edited = actor.getSnapshot();
+    expect(edited.value).toBe('confirming');
+    expect(edited.context.proposedActions).toEqual(editedActions);
+    expect(edited.context.pendingConfirmation?.preview).toEqual(['Enter "ok" into "ax:2"']);
+
+    actor.send({ type: 'APPROVE' });
+    const finalSnapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
     expect(finalSnapshot.value).toBe('done');
   });
 
   it('routes REJECT from confirming back through replanning to planning', async () => {
     let planCalls = 0;
     const services = mockServices({
-      checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: true })),
+      checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
       plan: () => {
         planCalls += 1;
         return Promise.resolve(
@@ -111,6 +154,32 @@ describe('agent loop machine', () => {
 
     expect(finalSnapshot.value).toBe('done');
     expect(planCalls).toBe(2);
+  });
+
+  it('routes a denied action through replanning without ever asking a human', async () => {
+    let planCalls = 0;
+    const services = mockServices({
+      checkPolicy: () =>
+        Promise.resolve(ok({ decision: 'deny', reason: 'chase.com is hard deny-listed' })),
+      plan: () => {
+        planCalls += 1;
+        return Promise.resolve(
+          ok({ subGoal: `attempt ${planCalls}`, taskComplete: planCalls > 1 }),
+        );
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Check my bank balance', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('done');
+    expect(planCalls).toBe(2);
+    expect(snapshot.context.lastError).toEqual({
+      code: 'POLICY_DENIED',
+      message: 'chase.com is hard deny-listed',
+    });
   });
 
   it('replans when the navigator reports being stuck', async () => {
@@ -281,7 +350,7 @@ describe('agent loop machine', () => {
 
   it('resumes correctly after being killed and rehydrated mid-run', async () => {
     const services = mockServices({
-      checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: true })),
+      checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
     });
     const firstMachine = createAgentLoopMachine(services, testExecutorContext());
     const firstActor = createActor(firstMachine, { input: { task: 'Delete account', tabId: 1 } });

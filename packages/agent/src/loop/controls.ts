@@ -1,3 +1,5 @@
+import type { Action } from '@aegis/actions';
+
 import type { AgentLoopEvent } from './machine';
 
 /**
@@ -33,4 +35,9 @@ export function approveLoop(actor: LoopControlHandle): void {
 /** Rejects a state-changing action the policy engine flagged for confirmation — the loop replans. */
 export function rejectLoop(actor: LoopControlHandle): void {
   actor.send({ type: 'REJECT' });
+}
+
+/** Revises the pending actions while still awaiting a confirmation decision (`docs/adr/0010-confirmation-gate.md`). */
+export function editLoop(actor: LoopControlHandle, actions: readonly Action[]): void {
+  actor.send({ type: 'EDIT', actions });
 }

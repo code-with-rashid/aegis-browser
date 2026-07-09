@@ -46,7 +46,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #20 Trust-tagging & sanitizer — blocked by: #3
 - [x] #21 Security policy engine — blocked by: #12, #3
-- [ ] #22 Confirmation gate — blocked by: #21, #15
+- [x] #22 Confirmation gate — blocked by: #21, #15
 - [ ] #23 Alignment critic — blocked by: #21, #5
 - [ ] #24 Secret vault & native fill — blocked by: #3, #13
 
@@ -97,6 +97,10 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   matrix: deny-list wins unless a stored policy is explicitly `mode: "allow"`;
   `state_changing` risk only skips confirmation when `mode: "allow"` AND
   `allowStateChanging: true` both hold.
+- [0010](docs/adr/0010-confirmation-gate.md) — Confirmation gate: `PolicyCheckOutput`
+  becomes a three-way `allow/confirm/deny` decision (locally typed, no
+  `@aegis/agent` → `@aegis/security` import); `deny` routes to `replanning`, not
+  `failed`; `EDIT` self-transitions within `confirming` to revise pending actions.
 
 ## Notes
 
