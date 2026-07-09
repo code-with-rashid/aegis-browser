@@ -153,6 +153,23 @@ executors.
 - Run locally: `pnpm build && pnpm e2e` (headed; needs a real display). CI runs it as a
   separate `e2e` job under `xvfb-run` on `ubuntu-latest`, apart from the four core gates.
 
+## E2E: confirmation-gated task (#32)
+
+See [ADR 0020](../../docs/adr/0020-e2e-confirmation-gated-task.md). Closes the gap ADR
+0019 found: `background/policy-service.ts` now resolves each action's target element name
+from perception and passes it as `ActionRiskContext` to `PolicyEngine.evaluate`, so a
+`click` on a "Buy Now"-named button genuinely elevates to `state_changing` risk and pauses
+the loop in `confirming` — the only path in this codebase from an ordinary action to a
+required human confirmation.
+
+`e2e/confirmation-gated-task.spec.ts` (`e2e/fixtures/checkout.html`,
+`e2e/scenarios/form-fill-confirmation.ts`) proves the safety path: the confirmation dialog
+appears with the pending click previewed, the fixture's own `#purchased` element stays
+hidden while it's showing (the click genuinely hasn't run), Reject drives a real
+`confirming -> replanning -> planning` transition (asserted via the visible "Replans: 1"
+counter, not just "the run finished somehow"), and `#purchased` is still hidden after the
+run reaches `done` — an unauthorized submit is not just unreported, it never happened.
+
 ## Commands
 
 ```bash

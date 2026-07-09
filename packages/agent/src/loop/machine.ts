@@ -286,7 +286,10 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       policyCheck: {
         invoke: {
           src: 'policyActor',
-          input: ({ context }) => ({ actions: context.proposedActions }),
+          input: ({ context }) => ({
+            actions: context.proposedActions,
+            ...(context.perception !== undefined ? { perception: context.perception } : {}),
+          }),
           onDone: [
             {
               guard: ({ event }) => isErr(event.output),
