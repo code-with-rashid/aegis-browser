@@ -47,4 +47,36 @@ persist → kill → rehydrate → resume round-trip, including mid-`confirming`
 awaiting user approval when the service worker died still asks for it again correctly on
 restart, rather than silently resuming as if approved).
 
+## Sanitization (a placeholder for #20)
+
+`identitySanitize`/`wrapUntrustedContent` (`sanitize.ts`) are the shape the real content
+trust-tagging/sanitizer (#20) will fill in. `wrapUntrustedContent` labels page-derived
+text as an explicit `<untrusted-page-content>` envelope — a real defense usable today —
+while `identitySanitize` is a pass-through placeholder for the deeper stripping (hidden
+text, zero-width characters, instruction-like imperatives) #20 adds. Callers that build
+prompts from perception take a `sanitize: SanitizeText` option so wiring in the real
+implementation later touches only the composition root, not `@aegis/agent`.
+
+## The Planner
+
+`createPlannerService(modelRouter, options?)` (`planner/create-planner-service.ts`)
+builds the `PlannerService` the loop machine invokes in `planning`. It calls
+`generateStructured` (`@aegis/llm`) against the `planner` role's model — resolved via
+`ModelRouter`, so it automatically gets the Planner's higher default temperature
+(`docs/DESIGN.md` §5: "higher-temp, 'smart' model") — with a schema matching §5's
+`AgentBrain` shape, `actions` replaced by `plan` (`planner/schema.ts`).
+
+`buildPlannerPrompt` (`planner/prompt.ts`) turns a `PlanInput` into that prompt: the
+task, prior sub-goal history, and — if perceived — the current page's element summary
+and readable content, sanitized then wrapped as untrusted data via `sanitize.ts`. The
+system prompt (`PLANNER_SYSTEM_PROMPT`) states the untrusted-content rule explicitly, so
+a page telling the model to "ignore previous instructions" is just inert text inside the
+envelope, never a command.
+
+The LLM's richer output (`observation`/`reasoning`/`memory`/`plan`) is adapted down to
+`PlanOutput` (`loop/services.ts`) — `subGoal`/`taskComplete`/`summary` are what the
+machine reads; the rest rides along for the trace UI (#26). Any failure (provider
+resolution, or `generateStructured` exhausting its retries) becomes a `PLANNER_FAILED`
+`AgentError` with the original error as `cause`.
+
 Depends on `@aegis/actions`, `@aegis/llm`, `@aegis/perception`, `@aegis/shared`.

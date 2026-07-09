@@ -40,6 +40,10 @@ export interface PlanOutput {
   readonly subGoal: string;
   readonly taskComplete: boolean;
   readonly summary?: string;
+  /** The full remaining plan and the planner's reasoning/memory — for the trace UI (#26); the machine only reads the fields above. */
+  readonly plan?: readonly string[];
+  readonly reasoning?: string;
+  readonly memory?: string;
 }
 export type PlannerService = (input: PlanInput) => Promise<Result<PlanOutput, AgentError>>;
 

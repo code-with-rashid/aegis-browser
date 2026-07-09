@@ -37,7 +37,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M4 — Agent loop
 
 - [x] #15 XState loop machine — blocked by: #3, #14, #10
-- [ ] #16 Planner agent — blocked by: #15, #5, #6, #10
+- [x] #16 Planner agent — blocked by: #15, #5, #6, #10
 - [ ] #17 Navigator agent — blocked by: #15, #5, #6, #10, #12
 - [ ] #18 Verifier — blocked by: #15, #10
 - [ ] #19 Loop guardrails & controls — blocked by: #15, #14
