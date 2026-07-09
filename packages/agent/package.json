@@ -15,7 +15,9 @@
     "@aegis/actions": "workspace:*",
     "@aegis/llm": "workspace:*",
     "@aegis/perception": "workspace:*",
-    "@aegis/shared": "workspace:*"
+    "@aegis/shared": "workspace:*",
+    "xstate": "^5.32.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.10",

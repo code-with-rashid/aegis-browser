@@ -1,0 +1,282 @@
+import { createFakeTabManager, type ExecutorContext } from '@aegis/actions';
+import { createFakeCdp, type PerceptionPayload } from '@aegis/perception';
+import { err, ok, toElementRef } from '@aegis/shared';
+import { createActor, waitFor } from 'xstate';
+import { describe, expect, it } from 'vitest';
+
+import { AgentError } from './errors';
+import { createAgentLoopMachine } from './machine';
+import type { LoopServices } from './services';
+
+const WAIT_TIMEOUT = 1000;
+
+function perceptionFixture(): PerceptionPayload {
+  return {
+    elements: [],
+    content: { text: '', truncated: false },
+    tokenEstimate: 0,
+    truncated: false,
+  };
+}
+
+function testExecutorContext(): ExecutorContext {
+  return { session: createFakeCdp(1), tabManager: createFakeTabManager(1) };
+}
+
+function mockServices(overrides: Partial<LoopServices> = {}): LoopServices {
+  return {
+    perceive: () => Promise.resolve(ok(perceptionFixture())),
+    plan: () => Promise.resolve(ok({ subGoal: 'do the thing', taskComplete: false })),
+    decide: () =>
+      Promise.resolve(
+        ok({ actions: [{ type: 'click', ref: toElementRef('ax:1') }], stuck: false }),
+      ),
+    checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: false })),
+    act: () => Promise.resolve({ kind: 'completed', results: [] }),
+    verify: () => Promise.resolve(ok({ subGoalComplete: true, taskComplete: true })),
+    ...overrides,
+  };
+}
+
+function isFinalized(snapshot: { status: string }): boolean {
+  return snapshot.status === 'done';
+}
+
+describe('agent loop machine', () => {
+  it('completes the happy path: planning -> perceiving -> deciding -> policyCheck -> acting -> verifying -> done', async () => {
+    const machine = createAgentLoopMachine(mockServices(), testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('done');
+    expect(snapshot.context.taskSummary).toBeUndefined();
+  });
+
+  it('finishes immediately when the planner reports the task already complete', async () => {
+    const services = mockServices({
+      plan: () =>
+        Promise.resolve(ok({ subGoal: 'n/a', taskComplete: true, summary: 'Already done' })),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('done');
+    expect(snapshot.context.taskSummary).toBe('Already done');
+  });
+
+  it('routes a state-changing action through confirming, and APPROVE resumes to acting', async () => {
+    const services = mockServices({
+      checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: true })),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Delete account', tabId: 1 } });
+    actor.start();
+
+    const confirmingSnapshot = await waitFor(actor, (s) => s.value === 'confirming', {
+      timeout: WAIT_TIMEOUT,
+    });
+    expect(confirmingSnapshot.value).toBe('confirming');
+
+    actor.send({ type: 'APPROVE' });
+    const finalSnapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(finalSnapshot.value).toBe('done');
+  });
+
+  it('routes REJECT from confirming back through replanning to planning', async () => {
+    let planCalls = 0;
+    const services = mockServices({
+      checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: true })),
+      plan: () => {
+        planCalls += 1;
+        return Promise.resolve(
+          ok({ subGoal: `attempt ${planCalls}`, taskComplete: planCalls > 1 }),
+        );
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Delete account', tabId: 1 } });
+    actor.start();
+
+    await waitFor(actor, (s) => s.value === 'confirming', { timeout: WAIT_TIMEOUT });
+    actor.send({ type: 'REJECT' });
+
+    const finalSnapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(finalSnapshot.value).toBe('done');
+    expect(planCalls).toBe(2);
+  });
+
+  it('replans when the navigator reports being stuck', async () => {
+    let decideCalls = 0;
+    const services = mockServices({
+      decide: () => {
+        decideCalls += 1;
+        return Promise.resolve(ok({ actions: [], stuck: decideCalls === 1 }));
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Find the button', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('done');
+    expect(decideCalls).toBe(2);
+  });
+
+  it('replans when acting reports a stall', async () => {
+    let actCalls = 0;
+    const services = mockServices({
+      act: () => {
+        actCalls += 1;
+        return Promise.resolve(
+          actCalls === 1
+            ? { kind: 'stalled', results: [], stalledOn: { type: 'wait', ms: 1 } }
+            : { kind: 'completed', results: [] },
+        );
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Click forever', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('done');
+    expect(actCalls).toBe(2);
+  });
+
+  it('fails when acting exhausts retries', async () => {
+    const services = mockServices({
+      act: () =>
+        Promise.resolve({
+          kind: 'failed',
+          results: [],
+          failedAction: { type: 'navigate', url: 'https://example.com' },
+        }),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Go somewhere', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('failed');
+    expect(snapshot.context.lastError?.code).toBe('ACTION_RUN_FAILED');
+  });
+
+  it('fails when a service reports an error', async () => {
+    const services = mockServices({
+      decide: () =>
+        Promise.resolve(err(new AgentError('NAVIGATOR_FAILED', 'model returned garbage'))),
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Confuse the navigator', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('failed');
+    expect(snapshot.context.lastError).toEqual({
+      code: 'NAVIGATOR_FAILED',
+      message: 'model returned garbage',
+    });
+  });
+
+  it('continues perceiving again when a sub-goal is not yet complete', async () => {
+    let verifyCalls = 0;
+    const services = mockServices({
+      verify: () => {
+        verifyCalls += 1;
+        return Promise.resolve(
+          ok({ subGoalComplete: verifyCalls > 1, taskComplete: verifyCalls > 1 }),
+        );
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Multi-step task', tabId: 1 } });
+    actor.start();
+
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('done');
+    expect(verifyCalls).toBe(2);
+  });
+
+  it('pauses on PAUSE during perceiving, and RESUME goes back to perceiving', async () => {
+    let perceiveCalls = 0;
+    const services = mockServices({
+      perceive: () => {
+        perceiveCalls += 1;
+        // The first call never resolves, so the actor reliably stays in "perceiving"
+        // until the test sends PAUSE — invoked actors are torn down on state exit, so
+        // this never-resolving promise is simply discarded once we leave the state.
+        if (perceiveCalls === 1) {
+          // eslint-disable-next-line @typescript-eslint/no-empty-function -- deliberately never resolves
+          return new Promise<never>(() => {});
+        }
+        return Promise.resolve(ok(perceptionFixture()));
+      },
+    });
+    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
+    actor.start();
+
+    await waitFor(actor, (s) => s.value === 'perceiving', { timeout: WAIT_TIMEOUT });
+    actor.send({ type: 'PAUSE' });
+    const pausedSnapshot = await waitFor(actor, (s) => s.value === 'paused', {
+      timeout: WAIT_TIMEOUT,
+    });
+    expect(pausedSnapshot.value).toBe('paused');
+
+    actor.send({ type: 'RESUME' });
+    const finalSnapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+    expect(finalSnapshot.value).toBe('done');
+    expect(perceiveCalls).toBe(2);
+  });
+
+  it('stops immediately on STOP, reaching the stopped final state', async () => {
+    const machine = createAgentLoopMachine(mockServices(), testExecutorContext());
+    const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
+    actor.start();
+
+    actor.send({ type: 'STOP' });
+    const snapshot = await waitFor(actor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(snapshot.value).toBe('stopped');
+  });
+
+  it('resumes correctly after being killed and rehydrated mid-run', async () => {
+    const services = mockServices({
+      checkPolicy: () => Promise.resolve(ok({ requiresConfirmation: true })),
+    });
+    const firstMachine = createAgentLoopMachine(services, testExecutorContext());
+    const firstActor = createActor(firstMachine, { input: { task: 'Delete account', tabId: 1 } });
+    firstActor.start();
+
+    await waitFor(firstActor, (s) => s.value === 'confirming', { timeout: WAIT_TIMEOUT });
+    const persistedSnapshot = firstActor.getPersistedSnapshot();
+    firstActor.stop(); // simulate the service worker being killed mid-task
+
+    // A fresh machine instance (a real restart re-wires services/executor context too).
+    const secondMachine = createAgentLoopMachine(services, testExecutorContext());
+    const secondActor = createActor(secondMachine, {
+      input: { task: 'Delete account', tabId: 1 },
+      snapshot: persistedSnapshot,
+    });
+    secondActor.start();
+
+    expect(secondActor.getSnapshot().value).toBe('confirming');
+
+    secondActor.send({ type: 'APPROVE' });
+    const finalSnapshot = await waitFor(secondActor, isFinalized, { timeout: WAIT_TIMEOUT });
+
+    expect(finalSnapshot.value).toBe('done');
+  });
+});
