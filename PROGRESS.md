@@ -65,7 +65,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #32 E2E: confirmation-gated task — blocked by: #27, #22, #23
 - [x] #33 Reliability eval harness — blocked by: #31
 - [x] #34 Security test suite — blocked by: #20, #22, #23, #32
-- [ ] #35 Cross-browser build, docs & v0.1.0 — blocked by: all prior issues
+- [x] #35 Cross-browser build, docs & v0.1.0 — blocked by: all prior issues
 
 ## ADR log
 
@@ -177,8 +177,17 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   text matching). Two new E2E scenarios deliberately script a "compromised" Navigator that
   falls for the injection, proving the Critic/policy-engine backstop still stops the
   induced action before it ever runs.
+- [0023](docs/adr/0023-v0-1-0-release.md) — v0.1.0 release: Edge verified empirically
+  (real `msedge` binary, real build, a real demo task run end-to-end) rather than assumed
+  Chromium-equivalent; no permanent Edge CI job, since `ubuntu-latest` runners don't have
+  Edge and Chrome's build already exercises the identical MV3 code path on every PR;
+  `docs/DESIGN.md` polished (not rewritten) to fix genuinely stale bits; root `README.md`
+  fully rewritten with install/BYOK/usage instructions cross-checked against the actual
+  rendered UI text, not written from memory.
 
 ## Notes
 
 - Phase A (bootstrap: labels, milestones, issues #1-#35) completed 2026-07-08.
-- Now entering Phase B build loop starting at #1.
+- Phase B (build loop, issues #1-#35) completed 2026-07-09 — all 35 issues implemented,
+  gated, and merged.
+- Phase C (finalize + tag v0.1.0): see `CHANGELOG.md` and the `v0.1.0` tag.
