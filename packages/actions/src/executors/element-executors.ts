@@ -10,7 +10,7 @@ import type {
   SendKeysAction,
 } from '../schema';
 import { parseKeyCombo } from './key-map';
-import { focusElement, resolveRef } from './resolve-ref';
+import { focusElement, resolveRef, selectElementContent } from './resolve-ref';
 import {
   ActionExecutionError,
   type ClickResult,
@@ -111,6 +111,21 @@ export async function executeInputText(
       new ActionExecutionError('CDP_SEND_FAILED', `Failed to focus ref "${action.ref}"`, {
         cause: focusResult.error,
       }),
+    );
+  }
+
+  // `Input.insertText` inserts at the cursor / replaces the current selection — it does
+  // not clear existing content on its own. Selecting everything first makes the action
+  // idempotent: the field ends up containing exactly `action.text`, regardless of what
+  // was there before or how many times this is retried (docs/adr/0026).
+  const selectResult = await selectElementContent(session, resolved.value.objectId);
+  if (isErr(selectResult)) {
+    return err(
+      new ActionExecutionError(
+        'CDP_SEND_FAILED',
+        `Failed to select existing content for ref "${action.ref}"`,
+        { cause: selectResult.error },
+      ),
     );
   }
 

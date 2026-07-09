@@ -99,6 +99,29 @@ describe('executeInputText', () => {
     expect(calls).toContainEqual(['Input.insertText', { text: 'hello' }]);
   });
 
+  it('selects existing content before inserting new text, so insertText replaces it', async () => {
+    const calls: [string, unknown][] = [];
+    const cdp = createFakeCdp(1, {
+      onSend: (method, params) => {
+        calls.push([method, params]);
+        if (method === 'DOM.resolveNode') {
+          return ok({ object: { type: 'object', objectId: 'obj-1' } });
+        }
+        return ok(undefined);
+      },
+    });
+    await cdp.attach();
+
+    await executeInputText(cdp, { type: 'input_text', ref: ref('ax:1'), text: 'hello' });
+
+    const methods = calls.map(([method]) => method);
+    const functionOnCount = methods.filter((method) => method === 'Runtime.callFunctionOn').length;
+    expect(functionOnCount).toBe(2); // focus() then select-all-content
+    expect(methods.lastIndexOf('Runtime.callFunctionOn')).toBeLessThan(
+      methods.indexOf('Input.insertText'),
+    );
+  });
+
   it('propagates a focus failure', async () => {
     const cdp = createFakeCdp(1, {
       onSend: (method) => {
@@ -120,6 +143,35 @@ describe('executeInputText', () => {
     });
 
     expect(isErr(result) && result.error.code).toBe('CDP_SEND_FAILED');
+  });
+
+  it('propagates a select-content failure', async () => {
+    let functionOnCalls = 0;
+    const cdp = createFakeCdp(1, {
+      onSend: (method) => {
+        if (method === 'DOM.resolveNode') {
+          return ok({ object: { type: 'object', objectId: 'obj-1' } });
+        }
+        if (method === 'Runtime.callFunctionOn') {
+          functionOnCalls += 1;
+          if (functionOnCalls === 1) {
+            return ok({ result: { type: 'undefined' } }); // focus succeeds
+          }
+          return err(new CdpError('CDP_SEND_FAILED', 'no select'));
+        }
+        return ok(undefined);
+      },
+    });
+    await cdp.attach();
+
+    const result = await executeInputText(cdp, {
+      type: 'input_text',
+      ref: ref('ax:1'),
+      text: 'hi',
+    });
+
+    expect(isErr(result) && result.error.code).toBe('CDP_SEND_FAILED');
+    expect(isErr(result) && result.error.message).toContain('select');
   });
 });
 
