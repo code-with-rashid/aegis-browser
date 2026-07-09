@@ -3,9 +3,9 @@ const ELEMENT_LINE_PATTERN = /-\s\[([^\]]+)]\s+\w+\s+"([^"]*)"/g;
 /**
  * Finds the `ElementRef` string for the first "Available elements" line (as rendered by
  * `@aegis/agent`'s navigator/planner prompt builders) whose accessible name contains
- * `nameSubstring` (case-insensitive) — so a scripted E2E response can reference a real
- * ref pulled straight out of the actual prompt, rather than guessing one, matching
- * whatever `hallucinated-refs.ts` requires to accept the action.
+ * `nameSubstring` (case-insensitive) — so a scripted response can reference a real ref
+ * pulled straight out of the actual prompt, rather than guessing one, matching whatever
+ * `hallucinated-refs.ts` requires to accept the action.
  */
 export function findRef(prompt: string, nameSubstring: string): string {
   const needle = nameSubstring.toLowerCase();

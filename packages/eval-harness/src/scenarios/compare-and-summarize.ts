@@ -6,6 +6,8 @@ export const COMPARE_AND_SUMMARIZE_TASK =
 
 export const COMPARE_AND_SUMMARIZE_EXPECTED_SUMMARY = 'Plan B is cheaper';
 
+export const COMPARE_AND_SUMMARIZE_FIXTURE = 'compare.html';
+
 /**
  * Scripted sequence for `compare.html`: click reveals Plan B's hidden price (a real DOM
  * change re-perceived before the next Navigator call), then `extract` reads both prices,

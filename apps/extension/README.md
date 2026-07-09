@@ -141,12 +141,13 @@ local fixture pages (`e2e/fixtures/`) — "research & extract," "compare & summa
 `buildLoopServices` → the real XState loop, real CDP perception, real CDP action
 executors.
 
-- `e2e/fake-model-server.ts` is the "mock/local model": a tiny local HTTP server
-  implementing just enough of the OpenAI chat-completions wire format for
-  `@ai-sdk/openai-compatible` to parse, seeded into `ModelRoutingConfig` via
-  `e2e/seed-storage.ts`. Each scenario (`e2e/scenarios/*.ts`) scripts its planner/
-  navigator/verifier responses; `e2e/find-ref.ts` extracts real element refs straight out
-  of the actual prompt text sent to the server, never hardcoding one.
+- The shared harness (extension launcher, fake local model server, static fixture
+  server, storage seeding, ref-extraction, and every fixture/scenario script) lives in
+  `packages/eval-harness` — also used by `evals/`'s reliability runner (#33), so the
+  exact same scenario definitions drive both CI correctness and reliability scoring.
+  Each scenario scripts its planner/navigator/verifier responses; `findRef` extracts
+  real element refs straight out of the actual prompt text sent to the server, never
+  hardcoding one.
 - Every scenario only proposes `read`/`input`-risk actions with element names chosen to
   avoid `STATE_CHANGING_KEYWORDS` — genuinely read-only, no confirmation-gate interaction
   (that's #32).
@@ -162,13 +163,13 @@ from perception and passes it as `ActionRiskContext` to `PolicyEngine.evaluate`,
 the loop in `confirming` — the only path in this codebase from an ordinary action to a
 required human confirmation.
 
-`e2e/confirmation-gated-task.spec.ts` (`e2e/fixtures/checkout.html`,
-`e2e/scenarios/form-fill-confirmation.ts`) proves the safety path: the confirmation dialog
-appears with the pending click previewed, the fixture's own `#purchased` element stays
-hidden while it's showing (the click genuinely hasn't run), Reject drives a real
-`confirming -> replanning -> planning` transition (asserted via the visible "Replans: 1"
-counter, not just "the run finished somehow"), and `#purchased` is still hidden after the
-run reaches `done` — an unauthorized submit is not just unreported, it never happened.
+`e2e/confirmation-gated-task.spec.ts` (fixture + scenario in `packages/eval-harness`)
+proves the safety path: the confirmation dialog appears with the pending click previewed,
+the fixture's own `#purchased` element stays hidden while it's showing (the click
+genuinely hasn't run), Reject drives a real `confirming -> replanning -> planning`
+transition (asserted via the visible "Replans: 1" counter, not just "the run finished
+somehow"), and `#purchased` is still hidden after the run reaches `done` — an
+unauthorized submit is not just unreported, it never happened.
 
 ## Commands
 

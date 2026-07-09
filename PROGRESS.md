@@ -63,7 +63,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #31 E2E: read-only use cases — blocked by: #16, #17, #18, #19, #26
 - [x] #32 E2E: confirmation-gated task — blocked by: #27, #22, #23
-- [ ] #33 Reliability eval harness — blocked by: #31
+- [x] #33 Reliability eval harness — blocked by: #31
 - [ ] #34 Security test suite — blocked by: #20, #22, #23, #32
 - [ ] #35 Cross-browser build, docs & v0.1.0 — blocked by: all prior issues
 
@@ -158,6 +158,14 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   Critic `aligned: true` (this issue tests the human gate, not alignment) and asserts the
   fixture's own DOM state (`#purchased` stays hidden) both mid-confirmation and after
   reject, not just the loop's self-reported status.
+- [0021](docs/adr/0021-reliability-eval-harness.md) — Reliability eval harness: extracted
+  `packages/eval-harness` from #31/#32's E2E specs (fixtures, scenarios, fake model
+  server, extension launcher) so the same versioned scenarios drive both correctness (CI
+  E2E) and reliability (`evals/`) with no risk of drift; `evals/`'s task set is only the
+  three read-only scenarios (not the confirmation-gated one — that's a safety proof, not
+  a reliability measurement); live mode only ever reads a credential from an explicit
+  `--api-key` flag, never the environment; `pnpm eval` (mock mode) is wired into the same
+  CI job as the E2E suite as the regression check.
 
 ## Notes
 
