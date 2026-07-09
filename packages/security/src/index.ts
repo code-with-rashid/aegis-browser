@@ -20,3 +20,12 @@ export type { PolicyStore } from './policy/policy-store';
 export { createPolicyStore } from './policy/policy-store';
 export type { PolicyEngine } from './policy/policy-engine';
 export { createPolicyEngine } from './policy/policy-engine';
+
+export type { VaultErrorCode } from './vault/vault-errors';
+export { VaultError } from './vault/vault-errors';
+export type { EncryptedBlob } from './vault/crypto-primitives';
+export { generateSalt, deriveVaultKey, encryptText, decryptText } from './vault/crypto-primitives';
+export type { SecretVault } from './vault/secret-vault';
+export { createSecretVault } from './vault/secret-vault';
+export { toSecretPlaceholder, findSecretPlaceholderNames } from './vault/secret-placeholder';
+export { resolveActionSecrets } from './vault/resolve-action-secrets';

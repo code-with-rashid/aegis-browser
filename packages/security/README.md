@@ -65,4 +65,35 @@ decision matrix; summary:
   (`policy/policy-engine.ts`) is the thin async composition of `PolicyStore.getPolicy` +
   `evaluatePolicy` — the `evaluate(action, origin, riskContext?)` API #21 asks for.
 
+## Secret vault & native fill
+
+WebCrypto-encrypted storage for credentials, per `docs/DESIGN.md` §7.4 — the model never
+sees a real secret value, only a placeholder. See
+[ADR 0012](../../docs/adr/0012-secret-vault.md) for the canary-based wrong-passphrase
+detection and why placeholder resolution lives here rather than in `@aegis/actions`.
+
+- `createSecretVault(storage)` (`vault/secret-vault.ts`) builds a `SecretVault`: starts
+  locked every session; `unlock(passphrase)` either bootstraps a fresh vault (first use)
+  or derives the same key and verifies it against a stored canary — a wrong passphrase
+  fails with `VAULT_WRONG_PASSPHRASE` without ever touching a real secret.
+  `setSecret`/`getSecret`/`removeSecret`/`listSecretNames` all require an unlocked vault
+  (`VAULT_LOCKED` otherwise); `lock()` clears the in-memory key, leaving persisted
+  (encrypted) secrets untouched.
+- `deriveVaultKey`/`encryptText`/`decryptText` (`vault/crypto-primitives.ts`) are the raw
+  WebCrypto primitives: PBKDF2-SHA256 (600,000 iterations) key derivation, AES-GCM
+  encrypt/decrypt with a fresh random IV per call. `crypto.subtle` is a global in both the
+  MV3 service worker and Node (this package's test environment).
+- `toSecretPlaceholder(name)`/`findSecretPlaceholderNames(text)` (`vault/secret-placeholder.ts`)
+  build/parse the `‹secret:name›` placeholder token the model sees — built from numeric
+  code points (`String.fromCodePoint(0x2039/0x203a)`), not literal characters in source,
+  matching this package's convention for Unicode that must be reproduced exactly.
+- `resolveActionSecrets(action, vault)` (`vault/resolve-action-secrets.ts`) resolves any
+  placeholders in an `input_text`/`send_keys` action's free-text field to their real
+  values via the vault — meant to run just before an action reaches `@aegis/actions`'
+  executors (which already do native CDP fill, #13), so the resolved value exists only
+  for the moment of execution, never upstream in a prompt or trace.
+- The vault has no concept of a rotating/dynamic code (TOTP, SMS OTP) — only static named
+  secrets. 2FA/MFA entry always falls to the human by construction, since there's nothing
+  here that could produce one.
+
 Depends on `@aegis/actions`, `@aegis/llm`, `@aegis/shared`.
