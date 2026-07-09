@@ -8,6 +8,7 @@ The WXT (Manifest V3) app. This is the composition root: it wires the domain pac
   `background/run-manager.ts`.
 - `entrypoints/sidepanel/` — React side panel (chat input, run controls, live status,
   action trace, confirmation gate).
+- `entrypoints/options/` — React options page (BYOK provider config per agent role).
 - `messaging/` — the typed `chrome.runtime.connect` bridge between them.
 - `background/` — the real, non-mock `LoopServices` composition (see ADR 0013).
 
@@ -40,7 +41,7 @@ Summary:
   `LoopServices`/`ExecutorContext` pair — every port is a genuine adapter
   (`createChromeCdpSession`, `createActionRunner`, `ProviderRegistry` + `ModelRouter`, a
   new `PolicyEngine`-backed `PolicyService`), not a stub. Starting a run before any
-  provider is configured (no options UI exists yet — #28) fails with a real,
+  provider is configured (see the options page, #28 below) fails with a real,
   user-surfaced `MODEL_ROUTING_NOT_CONFIGURED` reason.
 
 ## Action trace / log UI (#26)
@@ -71,6 +72,28 @@ silent dismiss — the loop would otherwise stay stuck in `confirming` with no d
 ever sent), and initial focus on Reject rather than Approve. "Edit" only offers editable
 free-text fields for `input_text`/`send_keys` actions ("Save changes" sends `EDIT_RUN`
 and returns to view mode — the human still has to click Approve afterward).
+
+## Options — models & keys (#28)
+
+See [ADR 0016](../../docs/adr/0016-options-models-and-keys.md). `entrypoints/options/`
+(opens in its own tab — a `<meta name="manifest.open_in_tab" content="true">` tag in
+`index.html`, WXT's per-entrypoint convention) is the BYOK configuration screen: one
+`ProviderConfigForm` per agent role (planner/navigator/verifier/critic), each with a
+provider-kind selector and kind-specific fields (API key masked behind a Show/Hide
+toggle, model, base URL where relevant).
+
+- `provider-draft.ts` holds the pure `ProviderDraft` <-> `ProviderConfig` conversion
+  (`toProviderConfig` re-validates through the existing `ProviderConfigSchema` on every
+  change; `draftFromConfig` flattens a saved config back into editable strings).
+- `test-connection.ts`'s `testProviderConnection` makes one real, minimal `generateText`
+  call through an injectable `ProviderFactory` (defaults to a real `ProviderRegistry`) —
+  runs directly from the options page, relying on the same `host_permissions: ['<all_urls>']`
+  CORS bypass already granted for CDP/tab access, no background round-trip needed.
+- `App.tsx` loads any previously-saved `ModelRoutingConfig` via `@aegis/llm`'s
+  `loadModelRoutingConfig`/`saveModelRoutingConfig` against
+  `createChromeStorageAdapter(chrome.storage.local)`, and only enables Save once every
+  role's draft parses to a valid `ProviderConfig` — a half-filled draft can never
+  overwrite a working saved config.
 
 ## Commands
 
