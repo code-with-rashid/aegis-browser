@@ -200,6 +200,16 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   offered to the Navigator, which re-proposed the same already-executed action against
   it. Fixed by skipping a hidden element's entire subtree (matching `display:none`
   semantics) in the DOM pruner.
+- [0026](docs/adr/0026-clear-before-input-text.md) — Select existing content before
+  `input_text` inserts (post-v0.1.0, issue #75): a follow-up live-model run of
+  `authenticated-read` (after #73's fix) showed a run where the model briefly mistyped
+  the access code, then correctly retried — but never recovered, timing out at 20+ more
+  identical-looking steps. `executeInputText` called `Input.insertText` straight after
+  `.focus()`, which inserts at the cursor rather than replacing content, so every retry
+  appended instead of overwriting and the field's value could never again exactly equal
+  what the model intended. Fixed by selecting all existing content before inserting;
+  re-verified live — `authenticated-read` now reaches `Done` in ~4-5 steps instead of
+  timing out.
 
 ## Notes
 
@@ -211,3 +221,5 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   live-mode eval run — see ADR 0024.
 - Post-release: issue #73 (filter hidden elements from the DOM pruner) found via a
   follow-up live-model eval re-run after #71 — see ADR 0025.
+- Post-release: issue #75 (select existing content before `input_text` inserts) found
+  via a follow-up live-model eval re-run after #73 — see ADR 0026.
