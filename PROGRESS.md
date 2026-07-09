@@ -56,7 +56,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #26 Action trace / log UI — blocked by: #25, #15
 - [x] #27 Confirmation gate UI — blocked by: #25, #22
 - [x] #28 Options — models & keys — blocked by: #25, #6
-- [ ] #29 Options — permissions panel — blocked by: #25, #21
+- [x] #29 Options — permissions panel — blocked by: #25, #21
 - [ ] #30 Options — secret vault UI — blocked by: #25, #24
 
 ### M7 — Integration, evals, release
@@ -128,6 +128,11 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   no round-trip needed) via an injectable `ProviderFactory`; one explicit Save gated on
   every role parsing to a valid `ProviderConfig`; options page opens in its own tab via
   WXT's per-entrypoint `<meta name="manifest.open_in_tab">` convention.
+- [0017](docs/adr/0017-options-permissions-panel.md) — Options permissions panel: options
+  page becomes tabbed (Models & Keys / Permissions); `PermissionsPanel` takes an injected
+  `PolicyStore` (unlike #28's untested `App.tsx` orchestration) since #29's acceptance
+  criteria explicitly requires tests; per-row auto-save, no page-level Save button, since
+  each origin's policy is independent; deny-list view is read-only.
 
 ## Notes
 

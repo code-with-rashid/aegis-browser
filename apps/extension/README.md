@@ -95,6 +95,25 @@ toggle, model, base URL where relevant).
   role's draft parses to a valid `ProviderConfig` — a half-filled draft can never
   overwrite a working saved config.
 
+## Options — permissions panel (#29)
+
+See [ADR 0017](../../docs/adr/0017-options-permissions-panel.md). `App.tsx` is now
+tabbed — "Models & Keys" (`models-and-keys-panel.tsx`, #28's original content, now taking
+its `StoragePort` as a prop) and "Permissions" (`permissions-panel.tsx`).
+
+- `PermissionsPanel` lists every configured `@aegis/security` `SitePolicy` (per-origin
+  `mode: ask/allow/deny` + `allowStateChanging`), each row auto-saving on change via an
+  injected `PolicyStore` — no page-level Save button, since each origin's policy is
+  independent. An "Add a site policy" form normalizes free-text input to a canonical
+  origin (`site-policy-draft.ts`'s `normalizeOrigin`, `new URL(input).origin`) before
+  validating it through the existing `SitePolicySchema`.
+- The hard deny-list (`DEFAULT_DENY_LIST_HOST_SUFFIXES`, from #21) is rendered read-only
+  — scope is "view," not edit; a user can still override one exact origin by setting its
+  own policy to `allow`.
+- Because `createPolicyStore` re-reads its backing storage on every call (no cache),
+  edits here take effect on the very next policy check `background/policy-service.ts`
+  makes — no extra wiring needed to satisfy "edits change gate behavior at runtime."
+
 ## Commands
 
 ```bash
