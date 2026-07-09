@@ -35,14 +35,26 @@ function toErrorSummary(error: AgentError): LoopErrorSummary {
   return { code: error.code, message: error.message };
 }
 
+/** Default guardrails (#19) — generous enough for real multi-step tasks, finite so the loop can never run forever. */
+export const DEFAULT_MAX_STEPS = 40;
+export const DEFAULT_MAX_REPLANS = 8;
+
 export interface AgentLoopInput {
   readonly task: string;
   readonly tabId: number;
+  /** Max action-execution cycles (`acting`) before the loop gives up. Default {@link DEFAULT_MAX_STEPS}. */
+  readonly maxSteps?: number;
+  /** Max times the loop may replan (stuck/rejected/stalled/failed-verification) before giving up. Default {@link DEFAULT_MAX_REPLANS}. */
+  readonly maxReplans?: number;
 }
 
 export interface AgentLoopContext {
   readonly task: string;
   readonly tabId: number;
+  readonly maxSteps: number;
+  readonly maxReplans: number;
+  readonly stepCount: number;
+  readonly replanCount: number;
   readonly subGoal: string | undefined;
   readonly subGoalHistory: readonly string[];
   readonly perception: PerceptionPayload | undefined;
@@ -64,6 +76,13 @@ export type AgentLoopEvent =
  * (planner/navigator/verifier/policy — injected so the machine stays pure and testable
  * with mocks) and `executorContext` (the live `CdpSession` + `TabManager` perception and
  * actions run against). Call once per task; `createActor` a new instance per run.
+ *
+ * Every invoked actor forwards its own `signal` (an `AbortSignal` XState ties to that
+ * invocation's lifetime) into the corresponding service call, so a service that honors
+ * it (e.g. the action runner, or any `generateStructured`-backed service) actually
+ * cancels in-flight work the moment the state is exited — including on `STOP`, which is
+ * handled as a normal event on every active state and so always takes effect immediately
+ * regardless of what the current step is doing (`docs/adr/0008-loop-guardrails.md`).
  */
 export function createAgentLoopMachine(services: LoopServices, executorContext: ExecutorContext) {
   return setup({
@@ -73,23 +92,23 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       input: {} as AgentLoopInput,
     },
     actors: {
-      planActor: fromPromise<Result<PlanOutput, AgentError>, PlanInput>(({ input }) =>
-        services.plan(input),
+      planActor: fromPromise<Result<PlanOutput, AgentError>, PlanInput>(({ input, signal }) =>
+        services.plan(input, signal),
       ),
-      perceiveActor: fromPromise<Result<PerceptionPayload, CdpError>, PerceiveInput>(({ input }) =>
-        services.perceive(input),
+      perceiveActor: fromPromise<Result<PerceptionPayload, CdpError>, PerceiveInput>(
+        ({ input, signal }) => services.perceive(input, signal),
       ),
-      decideActor: fromPromise<Result<DecideOutput, AgentError>, DecideInput>(({ input }) =>
-        services.decide(input),
+      decideActor: fromPromise<Result<DecideOutput, AgentError>, DecideInput>(({ input, signal }) =>
+        services.decide(input, signal),
       ),
       policyActor: fromPromise<Result<PolicyCheckOutput, AgentError>, PolicyCheckInput>(
-        ({ input }) => services.checkPolicy(input),
+        ({ input, signal }) => services.checkPolicy(input, signal),
       ),
-      actActor: fromPromise<RunOutcome, { actions: readonly Action[] }>(({ input }) =>
-        services.act(input.actions, executorContext),
+      actActor: fromPromise<RunOutcome, { actions: readonly Action[] }>(({ input, signal }) =>
+        services.act(input.actions, executorContext, signal),
       ),
-      verifyActor: fromPromise<Result<VerifyOutput, AgentError>, VerifyInput>(({ input }) =>
-        services.verify(input),
+      verifyActor: fromPromise<Result<VerifyOutput, AgentError>, VerifyInput>(({ input, signal }) =>
+        services.verify(input, signal),
       ),
     },
   }).createMachine({
@@ -97,6 +116,10 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
     context: ({ input }) => ({
       task: input.task,
       tabId: input.tabId,
+      maxSteps: input.maxSteps ?? DEFAULT_MAX_STEPS,
+      maxReplans: input.maxReplans ?? DEFAULT_MAX_REPLANS,
+      stepCount: 0,
+      replanCount: 0,
       subGoal: undefined,
       subGoalHistory: [],
       perception: undefined,
@@ -250,7 +273,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
               guard: ({ event }) => !isErr(event.output) && event.output.value.requiresConfirmation,
               target: 'confirming',
             },
-            { target: 'acting' },
+            { target: 'actingGate' },
           ],
           onError: {
             target: 'failed',
@@ -267,10 +290,30 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
 
       confirming: {
         on: {
-          APPROVE: 'acting',
+          APPROVE: 'actingGate',
           REJECT: 'replanning',
           STOP: 'stopped',
         },
+      },
+
+      /** Enforces the step budget before every action-execution cycle (#19). */
+      actingGate: {
+        always: [
+          {
+            guard: ({ context }) => context.stepCount >= context.maxSteps,
+            target: 'failed',
+            actions: assign({
+              lastError: ({ context }) => ({
+                code: 'MAX_STEPS_EXCEEDED',
+                message: `Reached the maximum of ${context.maxSteps} step(s) without completing the task`,
+              }),
+            }),
+          },
+          {
+            target: 'acting',
+            actions: assign({ stepCount: ({ context }) => context.stepCount + 1 }),
+          },
+        ],
       },
 
       acting: {
@@ -369,8 +412,24 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
         on: { STOP: 'stopped' },
       },
 
+      /** Enforces the replan budget before every replan (#19). */
       replanning: {
-        always: 'planning',
+        always: [
+          {
+            guard: ({ context }) => context.replanCount >= context.maxReplans,
+            target: 'failed',
+            actions: assign({
+              lastError: ({ context }) => ({
+                code: 'MAX_REPLANS_EXCEEDED',
+                message: `Reached the maximum of ${context.maxReplans} replan(s) without completing the task`,
+              }),
+            }),
+          },
+          {
+            target: 'planning',
+            actions: assign({ replanCount: ({ context }) => context.replanCount + 1 }),
+          },
+        ],
       },
 
       paused: {

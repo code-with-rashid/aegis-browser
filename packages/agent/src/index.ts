@@ -30,7 +30,7 @@ export type {
   AgentLoopEvent,
   LoopErrorSummary,
 } from './loop/machine';
-export { createAgentLoopMachine } from './loop/machine';
+export { createAgentLoopMachine, DEFAULT_MAX_STEPS, DEFAULT_MAX_REPLANS } from './loop/machine';
 
 export type { PersistableActor } from './loop/persistence';
 export {
@@ -38,6 +38,12 @@ export {
   hydrateAgentLoopSnapshot,
   clearAgentLoopSnapshot,
 } from './loop/persistence';
+
+export type { LoopControlHandle } from './loop/controls';
+export { stopLoop, pauseLoop, resumeLoop, approveLoop, rejectLoop } from './loop/controls';
+
+export type { LoopRunOutcome, LoopRunSummary, LoopSnapshotLike } from './loop/summary';
+export { summarizeLoopRun } from './loop/summary';
 
 export type { SanitizeText } from './sanitize';
 export { identitySanitize, wrapUntrustedContent } from './sanitize';

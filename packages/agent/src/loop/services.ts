@@ -26,8 +26,10 @@ export interface PerceiveInput {
   readonly session: CdpSession;
   readonly goal: string;
 }
+/** `signal` fires when the loop is stopped mid-step (#19) — honor it if the implementation can. */
 export type PerceiveService = (
   input: PerceiveInput,
+  signal?: AbortSignal,
 ) => Promise<Result<PerceptionPayload, CdpError>>;
 
 export interface PlanInput {
@@ -45,7 +47,10 @@ export interface PlanOutput {
   readonly reasoning?: string;
   readonly memory?: string;
 }
-export type PlannerService = (input: PlanInput) => Promise<Result<PlanOutput, AgentError>>;
+export type PlannerService = (
+  input: PlanInput,
+  signal?: AbortSignal,
+) => Promise<Result<PlanOutput, AgentError>>;
 
 export interface DecideInput {
   readonly subGoal: string;
@@ -60,7 +65,10 @@ export interface DecideOutput {
   readonly reasoning?: string;
   readonly memory?: string;
 }
-export type NavigatorService = (input: DecideInput) => Promise<Result<DecideOutput, AgentError>>;
+export type NavigatorService = (
+  input: DecideInput,
+  signal?: AbortSignal,
+) => Promise<Result<DecideOutput, AgentError>>;
 
 export interface PolicyCheckInput {
   readonly actions: readonly Action[];
@@ -71,11 +79,13 @@ export interface PolicyCheckOutput {
 }
 export type PolicyService = (
   input: PolicyCheckInput,
+  signal?: AbortSignal,
 ) => Promise<Result<PolicyCheckOutput, AgentError>>;
 
 export type ActService = (
   actions: readonly Action[],
   context: ExecutorContext,
+  signal?: AbortSignal,
 ) => Promise<RunOutcome>;
 
 export interface VerifyInput {
@@ -100,4 +110,7 @@ export interface VerifyOutput {
   /** The verifier's reasoning — for the trace UI (#26); the machine only reads the fields above. */
   readonly reasoning?: string;
 }
-export type VerifierService = (input: VerifyInput) => Promise<Result<VerifyOutput, AgentError>>;
+export type VerifierService = (
+  input: VerifyInput,
+  signal?: AbortSignal,
+) => Promise<Result<VerifyOutput, AgentError>>;

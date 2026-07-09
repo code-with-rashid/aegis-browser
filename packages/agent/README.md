@@ -34,6 +34,32 @@ context — it's the one thing that's fixed for a run's lifetime but isn't itsel
 Events: `STOP` (from any active state, to `stopped`), `PAUSE`/`RESUME` (around
 `perceiving`/`paused`), `APPROVE`/`REJECT` (from `confirming`).
 
+## Guardrails & controls
+
+Two budgets keep the loop provably finite (`docs/adr/0008-loop-guardrails.md`):
+`maxSteps` (default `DEFAULT_MAX_STEPS = 40`) caps action-execution cycles, checked by
+the `actingGate` state before every `acting`; `maxReplans` (default
+`DEFAULT_MAX_REPLANS = 8`) caps replans, checked by `replanning` before every `planning`
+that isn't the first. Either budget being hit ends the run at `failed` with a
+`MAX_STEPS_EXCEEDED`/`MAX_REPLANS_EXCEEDED` `lastError` rather than looping forever. The
+stall detector (`@aegis/actions`' `ActionRunner`, #14) is already wired: a `'stalled'`
+run outcome routes straight to `replanning`.
+
+Every service (`plan`/`perceive`/`decide`/`checkPolicy`/`act`/`verify`) takes a trailing
+`signal?: AbortSignal` — the actor's own signal, which XState aborts the moment its state
+is exited. `STOP` was already immediate at the state-machine level since #15 (`on: {
+STOP: ... }` fires regardless of what's in flight); this makes it immediate for the
+_underlying work_ too — an in-flight `generateStructured` call or action run actually
+gets canceled, not left running uselessly in the background.
+
+`loop/controls.ts` gives the (future) UI a small, decoupled API instead of requiring it
+to know the raw XState actor shape: `stopLoop`/`pauseLoop`/`resumeLoop`/`approveLoop`/
+`rejectLoop`, each just `actor.send({ type: ... })`. `summarizeLoopRun(snapshot)`
+(`loop/summary.ts`) turns any snapshot — mid-run or final — into a plain-data
+`LoopRunSummary` (`outcome`, `stepCount`, `replanCount`, `subGoalHistory`,
+`taskSummary`/`lastError` when set): the "graceful termination + summary" #19 asks for,
+usable for a trace UI (#26) or just a final report.
+
 ## Persistence & resume
 
 Per `docs/DESIGN.md` §4 ("MV3 workers can be evicted, so loop state is persisted... the
