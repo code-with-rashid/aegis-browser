@@ -191,6 +191,15 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   labeled, quoted `ref="el:3" role="..." name="..."` fields with no ambiguous delimiter;
   verified against the real model via a logging proxy — 0 ref-hallucination corrections
   across a re-run that previously hit dozens.
+- [0025](docs/adr/0025-filter-hidden-elements-from-dom-pruner.md) — Filter hidden
+  elements from the DOM pruner (post-v0.1.0, issue #73): re-running the live-model eval
+  after #71's fix surfaced the two findings ADR 0024 deferred — an `ACTION_RUN_FAILED`
+  click failure on `compare-and-summarize` and a verification-loop timeout on
+  `authenticated-read`. Both traced to one root cause: `interactive-pruner.ts` never
+  filtered hidden elements, so an element hidden by its own click handler kept being
+  offered to the Navigator, which re-proposed the same already-executed action against
+  it. Fixed by skipping a hidden element's entire subtree (matching `display:none`
+  semantics) in the DOM pruner.
 
 ## Notes
 
@@ -200,3 +209,5 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - Phase C (finalize + tag v0.1.0): see `CHANGELOG.md` and the `v0.1.0` tag.
 - Post-release: issue #71 (unambiguous element-ref format) found via the first real-model
   live-mode eval run — see ADR 0024.
+- Post-release: issue #73 (filter hidden elements from the DOM pruner) found via a
+  follow-up live-model eval re-run after #71 — see ADR 0025.
