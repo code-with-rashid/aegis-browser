@@ -1,10 +1,13 @@
 import {
+  approveLoop,
   buildTraceStep,
   clearAgentLoopSnapshot,
   createAgentLoopMachine,
+  editLoop,
   hydrateAgentLoopSnapshot,
   pauseLoop,
   persistAgentLoopOnTransition,
+  rejectLoop,
   resumeLoop,
   stopLoop,
   summarizeLoopRun,
@@ -188,6 +191,21 @@ export function createRunManager(
           case 'RESUME_RUN':
             if (activeActor !== undefined) {
               resumeLoop(activeActor);
+            }
+            return;
+          case 'APPROVE_RUN':
+            if (activeActor !== undefined) {
+              approveLoop(activeActor);
+            }
+            return;
+          case 'REJECT_RUN':
+            if (activeActor !== undefined) {
+              rejectLoop(activeActor);
+            }
+            return;
+          case 'EDIT_RUN':
+            if (activeActor !== undefined) {
+              editLoop(activeActor, message.actions);
             }
             return;
           default:

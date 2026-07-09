@@ -1,8 +1,9 @@
+import type { ConfirmationRequest } from './confirmation';
 import type { AgentLoopContext, LoopErrorSummary } from './machine';
 
 export type LoopRunOutcome = 'done' | 'failed' | 'stopped' | 'paused' | 'active';
 
-/** A plain-data report of one loop run — for the trace UI (#26), logs, or a final "here's what happened" message. */
+/** A plain-data report of one loop run — for the trace UI (#26), the confirmation gate UI (#27), logs, or a final "here's what happened" message. */
 export interface LoopRunSummary {
   readonly outcome: LoopRunOutcome;
   readonly task: string;
@@ -11,6 +12,8 @@ export interface LoopRunSummary {
   readonly subGoalHistory: readonly string[];
   readonly taskSummary?: string;
   readonly lastError?: LoopErrorSummary;
+  /** Set exactly while `outcome` reflects a run sitting in `confirming`, awaiting a human decision. */
+  readonly pendingConfirmation?: ConfirmationRequest;
 }
 
 /** The minimal shape of a machine snapshot `summarizeLoopRun` needs — matches `actor.getSnapshot()`. */
@@ -41,5 +44,8 @@ export function summarizeLoopRun(snapshot: LoopSnapshotLike): LoopRunSummary {
     subGoalHistory: context.subGoalHistory,
     ...(context.taskSummary !== undefined ? { taskSummary: context.taskSummary } : {}),
     ...(context.lastError !== undefined ? { lastError: context.lastError } : {}),
+    ...(context.pendingConfirmation !== undefined
+      ? { pendingConfirmation: context.pendingConfirmation }
+      : {}),
   };
 }

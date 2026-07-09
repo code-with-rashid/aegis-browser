@@ -253,6 +253,128 @@ describe('createRunManager', () => {
     });
   });
 
+  describe('confirmation gate', () => {
+    it('surfaces pendingConfirmation on RUN_STATUS while a run awaits a decision', async () => {
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop({ checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })) }),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'Delete account', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.pendingConfirmation !== undefined,
+      );
+
+      const withConfirmation = received.find(
+        (m) => m.type === 'RUN_STATUS' && m.summary.pendingConfirmation !== undefined,
+      );
+      expect(
+        withConfirmation?.type === 'RUN_STATUS' &&
+          withConfirmation.summary.pendingConfirmation?.preview,
+      ).toEqual(['Click "ax:1"']);
+    });
+
+    it('APPROVE_RUN resolves the confirmation and lets the run finish', async () => {
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop({ checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })) }),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'Delete account', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.pendingConfirmation !== undefined,
+      );
+
+      panelPort.send({ type: 'APPROVE_RUN' });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'done',
+      );
+    });
+
+    it('REJECT_RUN resolves the confirmation and replans instead of executing', async () => {
+      let planCalls = 0;
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop({
+          checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
+          plan: () => {
+            planCalls += 1;
+            return Promise.resolve(
+              ok({ subGoal: `attempt ${planCalls}`, taskComplete: planCalls > 1 }),
+            );
+          },
+        }),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'Delete account', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.pendingConfirmation !== undefined,
+      );
+
+      panelPort.send({ type: 'REJECT_RUN' });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'done',
+      );
+
+      expect(planCalls).toBe(2);
+    });
+
+    it('EDIT_RUN revises the pending actions, and the run can still be approved afterward', async () => {
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop({ checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })) }),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'Delete account', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.pendingConfirmation !== undefined,
+      );
+
+      const editedActions = [
+        { type: 'input_text' as const, ref: toElementRef('ax:2'), text: 'ok' },
+      ];
+      panelPort.send({ type: 'EDIT_RUN', actions: editedActions });
+      await waitForMessage(
+        received,
+        (m) =>
+          m.type === 'RUN_STATUS' &&
+          m.summary.pendingConfirmation?.preview[0] === 'Enter "ok" into "ax:2"',
+      );
+
+      panelPort.send({ type: 'APPROVE_RUN' });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'done',
+      );
+    });
+  });
+
   describe('trace', () => {
     it('broadcasts a TRACE_STEP after each verify resolves, with reasoning and action results', async () => {
       const manager = createRunManager(

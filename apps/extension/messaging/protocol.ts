@@ -1,14 +1,22 @@
+import type { Action } from '@aegis/actions';
 import type { LoopRunSummary, TraceStep } from '@aegis/agent';
 
 /** The one long-lived `chrome.runtime` port both sides connect through. */
 export const RUN_BRIDGE_PORT_NAME = 'aegis-run-bridge';
 
-/** Messages the side panel sends to the background composition root. */
+/**
+ * Messages the side panel sends to the background composition root.
+ * `APPROVE_RUN`/`REJECT_RUN`/`EDIT_RUN` resolve a `pendingConfirmation` (#27) — the
+ * confirmation gate UI blocks until one of these three is sent.
+ */
 export type PanelToBackgroundMessage =
   | { readonly type: 'START_RUN'; readonly task: string; readonly tabId: number }
   | { readonly type: 'STOP_RUN' }
   | { readonly type: 'PAUSE_RUN' }
-  | { readonly type: 'RESUME_RUN' };
+  | { readonly type: 'RESUME_RUN' }
+  | { readonly type: 'APPROVE_RUN' }
+  | { readonly type: 'REJECT_RUN' }
+  | { readonly type: 'EDIT_RUN'; readonly actions: readonly Action[] };
 
 /**
  * Messages the background sends back. `RUN_IDLE` means no run has ever started (or the
