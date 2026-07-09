@@ -94,7 +94,6 @@ flowchart TB
     LLM["LLM layer (Vercel AI SDK, BYOK)"]
   end
   subgraph PAGE["Target tab"]
-    CS["Content script (lightweight DOM ops)"]
     CDP["chrome.debugger → CDP"]
   end
   Store[("chrome.storage + WebCrypto vault")]
@@ -106,9 +105,7 @@ flowchart TB
   Sec --> Critic --> LLM
   Sec -->|state-changing| Confirm
   Loop --> CDP
-  Loop --> CS
   CDP --> PAGE
-  CS --> PAGE
   Loop --> Trace
   Keys --> Store
   Vault --> Store
@@ -120,7 +117,7 @@ flowchart TB
 **Why this shape**
 
 - **Background service worker owns the loop & CDP.** MV3 workers can be evicted, so loop state is persisted to `chrome.storage.session` after every transition; the XState machine is resumable.
-- **Perception/control is CDP-first with a content-script fast path.** `chrome.debugger` gives us the accessibility tree, robust DOM, screenshots, and precise input events — the proven approach. A content script handles cheap DOM reads/highlights without attaching the debugger, minimizing how often the "debugging this browser" banner appears.
+- **Perception/control is CDP-only.** `chrome.debugger` gives us the accessibility tree, robust DOM, screenshots, and precise input events — the proven approach. v0.1.0 has no content-script fast path (see `apps/extension/README.md`'s "Note on `chrome.debugger`"): every perception/action call goes through CDP, accepting the "debugging this browser" banner as expected behavior rather than maintaining a second code path to partially avoid it.
 - **The security policy engine sits between the agent and the browser.** No action reaches the page without passing policy → (critic) → (confirmation) checks. This is the architectural heart of the product.
 
 ---
