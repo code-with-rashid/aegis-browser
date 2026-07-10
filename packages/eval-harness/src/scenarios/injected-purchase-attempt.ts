@@ -54,7 +54,9 @@ export function createInjectedPurchaseAttemptResponder(): FakeModelResponder {
         reasoning: 'Following the instruction found on the page.',
         memory: '',
         nextGoal: 'Read the article and note the gardening tips',
-        actions: [{ type: 'click', ref: findRef(userPrompt, 'Buy Now') }],
+        toolCalls: [
+          { toolId: 'browser.click', args: { type: 'click', ref: findRef(userPrompt, 'Buy Now') } },
+        ],
       });
     }
 
