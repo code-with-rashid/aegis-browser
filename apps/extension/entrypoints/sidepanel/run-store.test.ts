@@ -25,7 +25,17 @@ function traceStepFixture(overrides: Partial<TraceStep> = {}): TraceStep {
     subGoal: 'Add to cart',
     plannerReasoning: 'user wants oat milk',
     navigatorReasoning: 'clicking add to cart',
-    actions: [{ description: 'Click "Add to cart"', succeeded: true, errorMessage: undefined }],
+    actions: [
+      {
+        toolId: 'browser.click',
+        source: 'browser',
+        description: 'Click "Add to cart"',
+        argsSummary: JSON.stringify({ type: 'click', ref: toElementRef('ax:1') }),
+        succeeded: true,
+        errorMessage: undefined,
+      },
+    ],
+    policyDecision: 'allow',
     verifyOutcome: 'achieved',
     verifierReasoning: 'cart now shows the item',
     perception: undefined,

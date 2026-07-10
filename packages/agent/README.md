@@ -138,22 +138,33 @@ persist → kill → rehydrate → resume round-trip, including mid-`confirming`
 awaiting user approval when the service worker died still asks for it again correctly on
 restart, rather than silently resuming as if approved).
 
-## Trace (for #26's trace UI)
+## Trace (for #26's trace UI, audited per #86)
 
 `context.plannerReasoning`/`navigatorReasoning`/`verifierReasoning`/`verifyOutcome`
 (`loop/machine.ts`) hold the _most recent_ Planner/Navigator/Verifier reasoning — captured
 in the same transition actions that already run, not a new machine concept.
-`buildTraceStep(context, stepNumber)` (`loop/trace.ts`) is a pure function turning one
-snapshot's context into a `TraceStep`: it zips `context.proposedActions` (real `Action`s,
-refs included) with `context.lastRunSummary.toolCalls` (success/error info, by `toolId`)
-by index, using `describeAction` (from `loop/confirmation.ts`) for each action's
-human-readable description — the same description a confirmation preview would show, or
-the raw `toolId` when there's no matching browser action (e.g. a non-browser tool call,
-until #90 gives tool calls their own distinct trace rendering). Returns `undefined`
-when there's nothing to report yet (`lastRunSummary` unset). See
-`docs/adr/0014-action-trace-log-ui.md`: accumulating a list of these into a persisted,
-broadcastable trace is composition-root work (`apps/extension/background/run-manager.ts`),
-not built here — this package only makes the per-step data available.
+`context.policyDecision` holds the security policy's `allow`/`confirm`/`deny` for the
+current step's tool-call batch (one decision per batch — `PolicyCheckOutput` doesn't
+distinguish per call), assigned on all three `policyCheck` outcomes.
+
+`buildTraceStep(context, stepNumber, toolRegistry, sanitize?)` (`loop/trace.ts`) is a pure
+function turning one snapshot's context into a `TraceStep`: it correlates
+`context.lastRunSummary.toolCalls` (success/error info, by `toolId`) with
+`context.proposedToolCalls` — **not** `context.proposedActions`, which only ever holds the
+browser-`Action` subset (#85) and would misalign against a batch mixing browser and
+MCP/WebMCP tool calls — by index, since both arrays are built from (and kept in lockstep
+with) the same Navigator decision. Each `TraceActionEntry` carries `toolId`, `source`
+(from the registry, so a UI can render an MCP call distinctly), a human-readable
+`description` (via `describeToolCall` from `loop/confirmation.ts` — sanitizes an
+MCP/WebMCP tool's untrusted `description` exactly as the critic's prompt already does,
+`describeAction` for a browser tool), and a length-capped `argsSummary` — enough to audit
+"server, tool, args, decision, result" for any tool call regardless of source. `TraceStep`
+itself carries `policyDecision`. Returns `undefined` when there's nothing to report yet
+(`lastRunSummary` unset). See `docs/adr/0014-action-trace-log-ui.md` and
+`docs/adr/0034-mcp-tool-permissioning.md`: accumulating a list of these into a persisted,
+broadcastable trace is composition-root work (`apps/extension/background/run-manager.ts`,
+which passes its live `ToolRegistry` and the real sanitizer), not built here — this
+package only makes the per-step data available.
 
 ## Sanitization (a placeholder for #20)
 

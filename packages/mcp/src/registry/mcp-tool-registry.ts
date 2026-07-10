@@ -1,5 +1,5 @@
 import { ToolExecutionError, type Tool, type ToolRegistry, type ToolRisk } from '@aegis/actions';
-import { err, isErr, ok, type Result } from '@aegis/shared';
+import { err, isErr, ok, type Result, type StorageError } from '@aegis/shared';
 
 import type { McpClientError } from '../client/errors';
 import {
@@ -15,9 +15,12 @@ import {
   type SecretResolveError,
   type SecretResolver,
 } from '../config/resolve-headers';
+import { gateMcpTools } from '../policy/gate-mcp-tools';
+import type { McpToolPolicyStore } from '../policy/mcp-tool-policy-store';
 import { jsonSchemaToZod } from './json-schema-to-zod';
+import { buildMcpToolId, toIdSegment } from './tool-id';
 
-export type McpToolRegistrationError = SecretResolveError | McpClientError;
+export type McpToolRegistrationError = SecretResolveError | McpClientError | StorageError;
 
 /**
  * Infers a Tool's static risk from its MCP annotations: `readOnlyHint: true` (and not
@@ -36,22 +39,13 @@ export function inferMcpToolRisk(annotations?: McpToolAnnotations): ToolRisk {
   return 'state_changing';
 }
 
-/** Namespaces a server's display name into an id-safe segment, e.g. `"My Server!"` → `"my_server"`. */
-function toIdSegment(name: string): string {
-  const cleaned = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  return cleaned.length > 0 ? cleaned : 'server';
-}
-
 function buildMcpTool(
   serverIdSegment: string,
   client: McpClient,
   descriptor: McpToolDescriptor,
 ): Tool {
   return {
-    id: `mcp.${serverIdSegment}.${descriptor.name}`,
+    id: buildMcpToolId(serverIdSegment, descriptor.name),
     source: 'mcp',
     description: descriptor.description ?? '',
     inputSchema: jsonSchemaToZod(descriptor.inputSchema),
@@ -81,24 +75,40 @@ function buildMcpTool(
 
 export interface RegisteredMcpServerTools {
   readonly toolIds: readonly string[];
+  /** Tool ids discovered for the first time this call — recorded deny (pending) in `policyStore`, and excluded from `toolIds`; surface these so a management UI (#89) can prompt for a decision. */
+  readonly newlyDiscoveredToolIds: readonly string[];
   /** Closes the underlying MCP connection every registered tool's `execute` reuses. Call when the server is disabled/removed, or the extension tears down. */
   disconnect(): Promise<void>;
 }
 
+const NOOP_REGISTRATION: RegisteredMcpServerTools = {
+  toolIds: [],
+  newlyDiscoveredToolIds: [],
+  disconnect: () => Promise.resolve(),
+};
+
 /**
- * Connects to `config` (an enabled MCP server), lists its tools, and registers each as a
+ * Connects to `config`, lists its tools, and registers each *allowed* tool (per
+ * `policyStore` — #86's deny-by-default admission gate, `gate-mcp-tools.ts`) as a
  * `source: "mcp"` Tool (`mcp.<server>.<tool>`) into `registry` — the bridge between
- * `@aegis/mcp` and the `ToolRegistry` the Navigator already consumes (#81). The returned
- * connection stays open for the registered tools' lifetime — each `Tool.execute` reuses
- * it rather than reconnecting per call; call `disconnect()` when the server is
- * disabled/removed or the extension tears down.
+ * `@aegis/mcp` and the `ToolRegistry` the Navigator already consumes (#81). A `config`
+ * with `enabled: false` is never even connected to (the per-server allow/deny gate) and
+ * resolves to an empty, no-op registration. The returned connection stays open for the
+ * registered tools' lifetime — each `Tool.execute` reuses it rather than reconnecting per
+ * call; call `disconnect()` when the server is disabled/removed or the extension tears
+ * down.
  */
 export async function registerMcpServerTools(
   registry: ToolRegistry,
   config: McpServerConnectionConfig,
   resolveSecret: SecretResolver,
+  policyStore: McpToolPolicyStore,
   options: CreateMcpClientOptions = {},
 ): Promise<Result<RegisteredMcpServerTools, McpToolRegistrationError>> {
+  if (!config.enabled) {
+    return ok(NOOP_REGISTRATION);
+  }
+
   const headersResult = await resolveAuthHeaders(config.authHeaders, resolveSecret);
   if (isErr(headersResult)) {
     return headersResult;
@@ -124,8 +134,14 @@ export async function registerMcpServerTools(
   }
 
   const serverIdSegment = toIdSegment(config.name);
+  const gateResult = await gateMcpTools(serverIdSegment, toolsResult.value, policyStore);
+  if (isErr(gateResult)) {
+    await client.disconnect();
+    return gateResult;
+  }
+
   const toolIds: string[] = [];
-  for (const descriptor of toolsResult.value) {
+  for (const descriptor of gateResult.value.allowed) {
     const tool = buildMcpTool(serverIdSegment, client, descriptor);
     registry.register(tool);
     toolIds.push(tool.id);
@@ -133,6 +149,7 @@ export async function registerMcpServerTools(
 
   return ok({
     toolIds,
+    newlyDiscoveredToolIds: gateResult.value.newlyDiscoveredToolIds,
     disconnect: () => client.disconnect(),
   });
 }

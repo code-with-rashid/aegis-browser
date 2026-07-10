@@ -78,7 +78,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #83 P2-4 MCP client (Streamable HTTP) — blocked by: none
 - [x] #84 P2-5 MCP server configuration + storage — blocked by: #83
 - [x] #85 P2-6 MCP tools → ToolRegistry — blocked by: #84, #81, #82
-- [ ] #86 P2-7 MCP permissioning — blocked by: #85
+- [x] #86 P2-7 MCP permissioning — blocked by: #85
 
 ### M10 — WebMCP fast-path
 
@@ -298,6 +298,19 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   `@aegis/mcp` takes its first cross-package dependency (`@aegis/actions`). MCP
   elicitation plumbing (`onElicitationRequest`) is wired into `McpClient.connect` but not
   yet routed through a real confirmation UI — that's #90.
+- [0034](docs/adr/0034-mcp-tool-permissioning.md) — MCP tool permissioning (Phase 2, issue
+  #86): `McpToolPolicy`/`McpToolPolicyStore` (mirroring `SitePolicy`/`PolicyStore`) plus
+  `gateMcpTools`, a deny-by-default admission gate `registerMcpServerTools` now runs after
+  `listTools()` — a tool never seen before is recorded `deny` (pending) and excluded, an
+  explicitly denied tool stays excluded, only an explicitly allowed tool is registered.
+  `config.enabled === false` skips connecting entirely (per-server gate). Also fixed a
+  latent trace bug found while auditing tool calls: `buildTraceStep` indexed the
+  browser-only `proposedActions` against the all-sources `lastRunSummary.toolCalls`,
+  which would misalign the moment a batch mixed an MCP call with a browser one (never
+  triggered before, since no MCP tool has ever run live) — now correlates against
+  `proposedToolCalls` instead, and `TraceStep`/`TraceActionEntry` gain `policyDecision`/
+  `toolId`/`source`/`argsSummary` for audit. No live MCP server is wired into the running
+  extension yet — deferred to #89, which also builds the UI to review pending tools.
 
 ## Notes
 
@@ -331,3 +344,4 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   real implementation.
 - #84 (MCP server config + storage) merged 2026-07-10 — see ADR 0032.
 - #85 (MCP tools → ToolRegistry) merged 2026-07-10 — see ADR 0033. Last issue in M9.
+- #86 (MCP permissioning) merged 2026-07-10 — see ADR 0034. Final issue in M9.

@@ -18,6 +18,7 @@ import type {
   PlanOutput,
   PolicyCheckInput,
   PolicyCheckOutput,
+  PolicyDecision,
   RunSummary,
   ToolCall,
   ToolRunOutcome,
@@ -76,6 +77,8 @@ export interface AgentLoopContext {
   readonly pendingConfirmation: ConfirmationRequest | undefined;
   /** The policy engine's reason for requiring confirmation — carried from `policyCheck` through `aligning` into the eventual `pendingConfirmation`. */
   readonly policyCheckReason: string | undefined;
+  /** The policy engine's decision for the current step's tool calls — surfaced for the trace/audit UI (#86) via `loop/trace.ts`'s `buildTraceStep`. */
+  readonly policyDecision: PolicyDecision | undefined;
   /** The most recent Planner/Navigator/Verifier reasoning — surfaced for the trace UI (#26) via `loop/trace.ts`'s `buildTraceStep`. */
   readonly plannerReasoning: string | undefined;
   readonly navigatorReasoning: string | undefined;
@@ -153,6 +156,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       taskSummary: undefined,
       pendingConfirmation: undefined,
       policyCheckReason: undefined,
+      policyDecision: undefined,
       plannerReasoning: undefined,
       navigatorReasoning: undefined,
       verifierReasoning: undefined,
@@ -323,6 +327,8 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
                         message: event.output.value.reason ?? 'Policy denied this action',
                       }
                     : undefined,
+                policyDecision: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.decision : undefined,
               }),
             },
             {
@@ -332,9 +338,17 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
               actions: assign({
                 policyCheckReason: ({ event }) =>
                   !isErr(event.output) ? event.output.value.reason : undefined,
+                policyDecision: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.decision : undefined,
               }),
             },
-            { target: 'actingGate' },
+            {
+              target: 'actingGate',
+              actions: assign({
+                policyDecision: ({ event }) =>
+                  !isErr(event.output) ? event.output.value.decision : undefined,
+              }),
+            },
           ],
           onError: {
             target: 'failed',

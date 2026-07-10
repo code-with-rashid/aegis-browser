@@ -1,3 +1,4 @@
+import type { ToolRegistry } from '@aegis/actions';
 import {
   approveLoop,
   buildTraceStep,
@@ -15,6 +16,7 @@ import {
   type AgentLoopEvent,
   type TraceStep,
 } from '@aegis/agent';
+import { sanitizePageContent } from '@aegis/security';
 import type { StoragePort } from '@aegis/shared';
 import { createActor, type Snapshot } from 'xstate';
 import { z } from 'zod';
@@ -104,7 +106,11 @@ export function createRunManager(
     return result.ok && result.value !== undefined ? (result.value as TraceStep[]) : [];
   }
 
-  function attachLifecycle(actor: LoopActorHandle, detach: () => Promise<unknown>): void {
+  function attachLifecycle(
+    actor: LoopActorHandle,
+    detach: () => Promise<unknown>,
+    toolRegistry: ToolRegistry,
+  ): void {
     stopPersisting?.();
     stopPersisting = persistAgentLoopOnTransition(actor, sessionStorage);
 
@@ -115,7 +121,12 @@ export function createRunManager(
       broadcast({ type: 'RUN_STATUS', summary: summarizeLoopRun(snapshot) });
 
       if (previousValue === 'verifying' && snapshot.value !== 'verifying') {
-        const step = buildTraceStep(snapshot.context, trace.length + 1);
+        const step = buildTraceStep(
+          snapshot.context,
+          trace.length + 1,
+          toolRegistry,
+          sanitizePageContent,
+        );
         if (step !== undefined) {
           trace.push(step);
           void persistTrace();
@@ -163,7 +174,7 @@ export function createRunManager(
     const machine = createAgentLoopMachine(built.services, built.executorContext);
     const actor = createActor(machine, { input: { task, tabId } });
     activeActor = actor;
-    attachLifecycle(actor, () => built.detach());
+    attachLifecycle(actor, () => built.detach(), built.toolRegistry);
     actor.start();
   }
 
@@ -252,7 +263,7 @@ export function createRunManager(
         snapshot: hydrateResult.value as Snapshot<unknown>,
       });
       activeActor = actor;
-      attachLifecycle(actor, () => built.detach());
+      attachLifecycle(actor, () => built.detach(), built.toolRegistry);
       actor.start();
     },
   };

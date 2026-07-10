@@ -1,4 +1,8 @@
-import { createFakeTabManager, type ExecutorContext } from '@aegis/actions';
+import {
+  createDefaultToolRegistry,
+  createFakeTabManager,
+  type ExecutorContext,
+} from '@aegis/actions';
 import {
   createAgentLoopMachine,
   hydrateAgentLoopSnapshot,
@@ -64,6 +68,7 @@ function fakeBuildLoop(
       ok({
         services: mockServices(servicesOverrides),
         executorContext: fakeExecutorContext(tabId),
+        toolRegistry: createDefaultToolRegistry(),
         attach: () => Promise.resolve(attachResult as never),
         detach: () => Promise.resolve(ok(undefined) as never),
       }),
@@ -433,7 +438,17 @@ describe('createRunManager', () => {
           subGoal: 'find the item',
           plannerReasoning: 'user wants oat milk',
           navigatorReasoning: 'clicking the search result',
-          actions: [{ description: 'Click "ax:1"', succeeded: true, errorMessage: undefined }],
+          actions: [
+            {
+              toolId: 'browser.click',
+              source: 'browser',
+              description: 'Click "ax:1"',
+              argsSummary: JSON.stringify({ type: 'click', ref: toElementRef('ax:1') }),
+              succeeded: true,
+              errorMessage: undefined,
+            },
+          ],
+          policyDecision: 'allow',
           verifyOutcome: 'achieved',
           verifierReasoning: 'cart shows the item',
           perception: perceptionFixture(),

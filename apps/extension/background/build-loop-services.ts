@@ -3,6 +3,7 @@ import {
   createChromeTabManager,
   createDefaultToolRegistry,
   type ExecutorContext,
+  type ToolRegistry,
 } from '@aegis/actions';
 import {
   createCriticService,
@@ -34,6 +35,8 @@ export interface BuildLoopServicesError {
 export interface BuiltLoop {
   readonly services: LoopServices;
   readonly executorContext: ExecutorContext;
+  /** The registry `services` was built against — the trace/audit UI (#86) needs this to describe a tool call by its actual source, not just a browser `Action`. */
+  readonly toolRegistry: ToolRegistry;
   /** Attaches the live CDP session — call before creating the loop actor. */
   attach(): Promise<Result<void, CdpError>>;
   /** Detaches the CDP session — call once the run reaches a terminal state. */
@@ -101,6 +104,7 @@ export async function buildLoopServices(
   return ok({
     services,
     executorContext,
+    toolRegistry,
     attach: () => session.attach(),
     detach: () => session.detach(),
   });
