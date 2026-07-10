@@ -76,7 +76,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M9 — MCP client
 
 - [x] #83 P2-4 MCP client (Streamable HTTP) — blocked by: none
-- [ ] #84 P2-5 MCP server configuration + storage — blocked by: #83
+- [x] #84 P2-5 MCP server configuration + storage — blocked by: #83
 - [ ] #85 P2-6 MCP tools → ToolRegistry — blocked by: #84, #81, #82
 - [ ] #86 P2-7 MCP permissioning — blocked by: #85
 
@@ -284,6 +284,12 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   real local HTTP server (the SDK's `McpServer` + `StreamableHTTPServerTransport` bound
   to an ephemeral `127.0.0.1` port), run in stateful mode after stateless mode proved
   broken under this SDK version's Node HTTP bridge.
+- [0032](docs/adr/0032-mcp-server-config-storage.md) — MCP server config storage (Phase
+  2, issue #84): `McpServerConnectionConfig` is keyed by `url` (mirroring `SitePolicy`'s
+  origin key); an auth header stores only a `secretName` reference, never a value.
+  `@aegis/mcp` stays a sibling of `@aegis/security` — resolution is an injected
+  `SecretResolver` function, not a vault import. `testMcpServerConnection` performs the
+  same resolve → connect → list-tools steps a real `ToolRegistry` wiring will.
 
 ## Notes
 
@@ -315,3 +321,4 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
 - #83 (MCP client over Streamable HTTP) merged 2026-07-10 — see ADR 0031. First issue
   in M9; `@aegis/mcp` gains a real dependency (`@modelcontextprotocol/sdk`) and its first
   real implementation.
+- #84 (MCP server config + storage) merged 2026-07-10 — see ADR 0032.
