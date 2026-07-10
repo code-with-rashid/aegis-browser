@@ -44,7 +44,9 @@ export function createFormFillConfirmationResponder(): FakeModelResponder {
         reasoning: 'Clicking it completes the purchase.',
         memory: '',
         nextGoal: 'Click Buy Now to complete the purchase',
-        actions: [{ type: 'click', ref: findRef(userPrompt, 'Buy Now') }],
+        toolCalls: [
+          { toolId: 'browser.click', args: { type: 'click', ref: findRef(userPrompt, 'Buy Now') } },
+        ],
       });
     }
 

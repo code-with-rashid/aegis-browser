@@ -18,7 +18,7 @@ const baseInput: VerifyInput = {
   task: 'Buy oat milk',
   subGoal: 'Add oat milk to cart',
   perception: perceptionFixture('Cart shows 1 item: Oat Milk'),
-  runSummary: { kind: 'completed', actions: [{ type: 'click', succeeded: true }] },
+  runSummary: { kind: 'completed', toolCalls: [{ toolId: 'browser.click', succeeded: true }] },
 };
 
 describe('createVerifierService', () => {
@@ -101,7 +101,7 @@ describe('createVerifierService', () => {
       ...baseInput,
       runSummary: {
         kind: 'completed',
-        actions: [{ type: 'click', succeeded: false, errorCode: 'ELEMENT_DETACHED' }],
+        toolCalls: [{ toolId: 'browser.click', succeeded: false, errorCode: 'ELEMENT_DETACHED' }],
       },
     };
 
@@ -121,7 +121,7 @@ describe('createVerifierService', () => {
     });
     const verify = createVerifierService(routerFor(provider));
 
-    const input: VerifyInput = { ...baseInput, runSummary: { kind: 'stalled', actions: [] } };
+    const input: VerifyInput = { ...baseInput, runSummary: { kind: 'stalled', toolCalls: [] } };
 
     const result = await verify(input);
 

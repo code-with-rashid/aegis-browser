@@ -1,5 +1,12 @@
 # 0006 — Navigator uses a transform-free mirror of `ActionSchema` for LLM output
 
+> **Superseded by [ADR 0029](0029-tool-calling-agent-loop.md)** (Phase 2, issue #81):
+> `navigator/llm-action-schema.ts` is deleted. The Navigator's wire schema is now generic
+> tool calls (`{toolId, args: z.unknown()}`), so there's no per-action union to mirror;
+> each tool's schema is instead rendered as prompt text via `z.toJSONSchema(...,
+{unrepresentable: 'any'})`, which sidesteps the same `.transform()` limitation this ADR
+> describes without needing a parallel schema at all. Kept below for historical context.
+
 ## Context
 
 The Navigator (#17) needs `generateStructured` (#5) to validate the model's proposed

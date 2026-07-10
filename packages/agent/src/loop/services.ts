@@ -1,9 +1,8 @@
-import type { Action, ExecutorContext, RunOutcome } from '@aegis/actions';
+import type { Action, ExecutorContext, ToolResult } from '@aegis/actions';
 import type { CdpError, CdpSession, PerceptionPayload } from '@aegis/perception';
 import type { Result } from '@aegis/shared';
 
 import type { AgentError } from './errors';
-import type { RunSummary } from './run-summary';
 
 /**
  * The agent loop's collaborators, injected rather than imported directly so the state
@@ -60,8 +59,30 @@ export interface DecideInput {
   readonly subGoal: string;
   readonly perception: PerceptionPayload;
 }
+
+/** One call the Navigator chose to make — a tool `id` (`Tool.id`, `@aegis/actions`) plus its already-validated `args` (per that tool's `inputSchema`). */
+export interface ToolCall {
+  readonly toolId: string;
+  readonly args: unknown;
+}
+
 export interface DecideOutput {
+  /**
+   * The browser-`Action` view of `toolCalls` — only entries backed by a
+   * `source: "browser"` tool, re-parsed through the real (branded) action schemas. Feeds
+   * the policy engine, alignment critic, confirmation UI, and trace, none of which are
+   * tool-call-aware yet (#82, #90). Always the full list today (every registered tool is
+   * `source: "browser"` until #85/#87 register others) — will be a subset once MCP/WebMCP
+   * tools are live.
+   */
   readonly actions: readonly Action[];
+  /**
+   * The authoritative decision — every tool call, from any source. `optional` so services
+   * and tests that only ever dealt in browser `Action`s can keep constructing a
+   * `DecideOutput` from `actions` alone; the loop machine derives `toolCalls` from
+   * `actions` (via {@link actionToToolCall}) when this is omitted.
+   */
+  readonly toolCalls?: readonly ToolCall[];
   /** True when the navigator can't find an actionable next step — triggers a replan. */
   readonly stuck: boolean;
   /** The navigator's observation/reasoning/memory — for the trace UI (#26); the machine only reads the fields above. */
@@ -73,6 +94,11 @@ export type NavigatorService = (
   input: DecideInput,
   signal?: AbortSignal,
 ) => Promise<Result<DecideOutput, AgentError>>;
+
+/** `browser.<action.type>`, with `args` the action itself — the inverse of how a browser tool call's `args` already double as a real `Action` (`@aegis/actions`' `browser-tools.ts`). Used to keep `toolCalls` in lockstep whenever `actions` changes outside the Navigator (e.g. a human `EDIT` during confirmation). */
+export function actionToToolCall(action: Action): ToolCall {
+  return { toolId: `browser.${action.type}`, args: action };
+}
 
 export interface PolicyCheckInput {
   readonly actions: readonly Action[];
@@ -118,11 +144,47 @@ export type CriticService = (
   signal?: AbortSignal,
 ) => Promise<Result<CriticCheckOutput, AgentError>>;
 
+/** One executed tool call, capturing which attempt succeeded (or that all attempts failed). */
+export interface ToolCallRunResult {
+  readonly toolCall: ToolCall;
+  readonly attempt: number;
+  readonly outcome: ToolResult;
+}
+
+/** The outcome of running a batch of tool calls — the tool-call generalization of `@aegis/actions`' `RunOutcome`. */
+export type ToolRunOutcome =
+  | { readonly kind: 'completed'; readonly results: readonly ToolCallRunResult[] }
+  | {
+      readonly kind: 'failed';
+      readonly results: readonly ToolCallRunResult[];
+      readonly failedToolCall: ToolCall;
+    }
+  | {
+      readonly kind: 'stalled';
+      readonly results: readonly ToolCallRunResult[];
+      readonly stalledOn: ToolCall;
+    }
+  | { readonly kind: 'aborted'; readonly results: readonly ToolCallRunResult[] };
+
 export type ActService = (
-  actions: readonly Action[],
+  toolCalls: readonly ToolCall[],
   context: ExecutorContext,
   signal?: AbortSignal,
-) => Promise<RunOutcome>;
+) => Promise<ToolRunOutcome>;
+
+/** A plain-data summary of one attempted tool call — safe to persist (no `Error` instances). */
+export interface ToolCallOutcomeSummary {
+  readonly toolId: string;
+  readonly succeeded: boolean;
+  readonly errorCode?: string;
+  readonly errorMessage?: string;
+}
+
+/** A plain-data summary of a whole {@link ToolRunOutcome} — what the verifier/UI need, nothing more. */
+export interface RunSummary {
+  readonly kind: ToolRunOutcome['kind'];
+  readonly toolCalls: readonly ToolCallOutcomeSummary[];
+}
 
 export interface VerifyInput {
   /** The overall user task — needed to judge `taskComplete`, not just this sub-goal. */
@@ -130,7 +192,7 @@ export interface VerifyInput {
   readonly subGoal: string;
   /** Perception taken AFTER acting — verification always looks at fresh, post-action state. */
   readonly perception: PerceptionPayload;
-  /** A plain-data summary of the just-completed run (see `run-summary.ts`), not the raw `RunOutcome`. */
+  /** A plain-data summary of the just-completed run (see `run-summary.ts`), not the raw `ToolRunOutcome`. */
   readonly runSummary: RunSummary;
 }
 /**

@@ -59,9 +59,12 @@ export function createAuthenticatedReadResponder(): FakeModelResponder {
           reasoning: 'Type the code, then click Enter to unlock the page.',
           memory: '',
           nextGoal: 'Enter the access code and unlock the page',
-          actions: [
-            { type: 'input_text', ref: findRef(userPrompt, 'Access code'), text: '1234' },
-            { type: 'click', ref: findRef(userPrompt, 'Enter') },
+          toolCalls: [
+            {
+              toolId: 'browser.input_text',
+              args: { type: 'input_text', ref: findRef(userPrompt, 'Access code'), text: '1234' },
+            },
+            { toolId: 'browser.click', args: { type: 'click', ref: findRef(userPrompt, 'Enter') } },
           ],
         });
       }
@@ -70,7 +73,12 @@ export function createAuthenticatedReadResponder(): FakeModelResponder {
         reasoning: 'Extracting the page content surfaces the secret fact.',
         memory: '',
         nextGoal: 'Read the revealed secret fact',
-        actions: [{ type: 'extract', instructions: 'Read the revealed secret fact' }],
+        toolCalls: [
+          {
+            toolId: 'browser.extract',
+            args: { type: 'extract', instructions: 'Read the revealed secret fact' },
+          },
+        ],
       });
     }
 

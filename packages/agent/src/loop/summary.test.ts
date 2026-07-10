@@ -15,6 +15,7 @@ function contextFixture(overrides: Partial<AgentLoopContext> = {}): AgentLoopCon
     subGoalHistory: ['search for oat milk', 'add to cart'],
     perception: undefined,
     proposedActions: [],
+    proposedToolCalls: [],
     lastRunSummary: undefined,
     lastError: undefined,
     taskSummary: undefined,

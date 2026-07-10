@@ -54,7 +54,12 @@ export function createCompareAndSummarizeResponder(): FakeModelResponder {
           reasoning: "Clicking it reveals Plan B's price.",
           memory: '',
           nextGoal: "Reveal Plan B's price",
-          actions: [{ type: 'click', ref: findRef(userPrompt, 'Reveal Plan B price') }],
+          toolCalls: [
+            {
+              toolId: 'browser.click',
+              args: { type: 'click', ref: findRef(userPrompt, 'Reveal Plan B price') },
+            },
+          ],
         });
       }
       return JSON.stringify({
@@ -62,7 +67,12 @@ export function createCompareAndSummarizeResponder(): FakeModelResponder {
         reasoning: 'Extracting the page content surfaces both prices.',
         memory: '',
         nextGoal: 'Extract both plan prices and compare them',
-        actions: [{ type: 'extract', instructions: 'Extract both plan prices for comparison' }],
+        toolCalls: [
+          {
+            toolId: 'browser.extract',
+            args: { type: 'extract', instructions: 'Extract both plan prices for comparison' },
+          },
+        ],
       });
     }
 

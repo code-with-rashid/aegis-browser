@@ -28,7 +28,13 @@ function contextFixture(overrides: Partial<AgentLoopContext> = {}): AgentLoopCon
     subGoalHistory: ['Add to cart'],
     perception: perceptionFixture(),
     proposedActions: [{ type: 'click', ref: toElementRef('ax:1') }],
-    lastRunSummary: { kind: 'completed', actions: [{ type: 'click', succeeded: true }] },
+    proposedToolCalls: [
+      { toolId: 'browser.click', args: { type: 'click', ref: toElementRef('ax:1') } },
+    ],
+    lastRunSummary: {
+      kind: 'completed',
+      toolCalls: [{ toolId: 'browser.click', succeeded: true }],
+    },
     lastError: undefined,
     taskSummary: undefined,
     pendingConfirmation: undefined,
@@ -71,9 +77,9 @@ describe('buildTraceStep', () => {
       contextFixture({
         lastRunSummary: {
           kind: 'failed',
-          actions: [
+          toolCalls: [
             {
-              type: 'click',
+              toolId: 'browser.click',
               succeeded: false,
               errorCode: 'ELEMENT_DETACHED',
               errorMessage: 'no longer attached',
@@ -89,10 +95,10 @@ describe('buildTraceStep', () => {
     ]);
   });
 
-  it('falls back to the raw action type when there is no matching proposed action', () => {
+  it('falls back to the raw tool id when there is no matching proposed action', () => {
     const step = buildTraceStep(contextFixture({ proposedActions: [] }), 1);
     expect(step?.actions).toEqual([
-      { description: 'click', succeeded: true, errorMessage: undefined },
+      { description: 'browser.click', succeeded: true, errorMessage: undefined },
     ]);
   });
 
@@ -100,11 +106,15 @@ describe('buildTraceStep', () => {
     const step = buildTraceStep(
       contextFixture({
         proposedActions: [{ type: 'click', ref: toElementRef('ax:1') }, { type: 'go_back' }],
+        proposedToolCalls: [
+          { toolId: 'browser.click', args: { type: 'click', ref: toElementRef('ax:1') } },
+          { toolId: 'browser.go_back', args: { type: 'go_back' } },
+        ],
         lastRunSummary: {
           kind: 'completed',
-          actions: [
-            { type: 'click', succeeded: true },
-            { type: 'go_back', succeeded: true },
+          toolCalls: [
+            { toolId: 'browser.click', succeeded: true },
+            { toolId: 'browser.go_back', succeeded: true },
           ],
         },
       }),

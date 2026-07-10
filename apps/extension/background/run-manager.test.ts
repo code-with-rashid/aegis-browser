@@ -402,7 +402,10 @@ describe('createRunManager', () => {
               kind: 'completed',
               results: [
                 {
-                  action: { type: 'click', ref: toElementRef('ax:1') },
+                  toolCall: {
+                    toolId: 'browser.click',
+                    args: { type: 'click', ref: toElementRef('ax:1') },
+                  },
                   attempt: 1,
                   outcome: { ok: true, value: { kind: 'click' } },
                 },

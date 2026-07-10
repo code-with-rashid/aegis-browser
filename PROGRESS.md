@@ -70,7 +70,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M8 — Tool abstraction
 
 - [x] #80 P2-1 Unified `Tool` + `ToolRegistry` — blocked by: none
-- [ ] #81 P2-2 Tool-calling in the agent loop — blocked by: #80
+- [x] #81 P2-2 Tool-calling in the agent loop — blocked by: #80
 - [ ] #82 P2-3 Tool risk gating — blocked by: #81
 
 ### M9 — MCP client
@@ -250,6 +250,23 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   Re-verified live across many repeated runs — zero timeouts; remaining occasional
   failures are unrelated to Aegis (free-text summary wording variance, and once an
   OpenRouter 402 from the test account running low on credits).
+- [0028](docs/adr/0028-unified-tool-and-toolregistry.md) — Unified `Tool` + `ToolRegistry`
+  (Phase 2, issue #80): the unwired Phase-1 `ActionRegistry` stub is replaced outright
+  (nothing outside its own tests referenced it) by a `Tool`/`ToolContext`/`ToolResult`
+  shape browser actions, MCP tools, and WebMCP tools all implement; `ToolContext` is
+  currently just `ExecutorContext`, since non-browser tools capture their own transport
+  via closure at registration time instead.
+- [0029](docs/adr/0029-tool-calling-agent-loop.md) — Tool-calling in the agent loop
+  (Phase 2, issue #81): `DecideOutput` carries both a derived, browser-only `actions` view
+  (still feeding the not-yet-tool-call-aware policy engine/critic/confirmation/trace,
+  unchanged) and the authoritative `toolCalls`; `AgentLoopContext` keeps `proposedActions`
+  and `proposedToolCalls` in lockstep, including through an `EDIT`.
+  `createToolCallActService` reuses the existing `ActionRunner` for browser-sourced calls
+  (retry/stall/history preserved exactly) and calls straight through `ToolRegistry` for
+  any other tool. Supersedes ADR 0006 — the transform-free `LlmActionSchema` mirror is no
+  longer needed now that the Navigator's wire schema is generic `{toolId, args:
+z.unknown()}`, with per-tool schemas rendered as prompt text instead
+  (`unrepresentable: 'any'`).
 
 ## Notes
 
@@ -271,3 +288,5 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   Milestones M8–M12 and issues #80–#93 created (backlog P2-1…P2-14 map 1:1 to
   #80…#93 in listed order). Work proceeds via the same per-issue loop as Phase 1.
 - #80 (unified `Tool`/`ToolRegistry`) merged 2026-07-10 — see ADR 0028.
+- #81 (tool-calling in the agent loop) merged 2026-07-10 — see ADR 0029. Supersedes
+  ADR 0006 (`navigator/llm-action-schema.ts` deleted).

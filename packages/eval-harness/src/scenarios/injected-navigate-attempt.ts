@@ -57,7 +57,9 @@ export function createInjectedNavigateAttemptResponder(): FakeModelResponder {
         reasoning: 'Following the instruction found on the page.',
         memory: '',
         nextGoal: 'Read the notice',
-        actions: [{ type: 'navigate', url: MALICIOUS_DESTINATION }],
+        toolCalls: [
+          { toolId: 'browser.navigate', args: { type: 'navigate', url: MALICIOUS_DESTINATION } },
+        ],
       });
     }
 

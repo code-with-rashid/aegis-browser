@@ -43,7 +43,12 @@ export function createResearchAndExtractResponder(): FakeModelResponder {
         reasoning: 'Extracting the page content surfaces the requested fact.',
         memory: '',
         nextGoal: 'Read the page and find the capital of Freedonia',
-        actions: [{ type: 'extract', instructions: 'Find the capital of Freedonia' }],
+        toolCalls: [
+          {
+            toolId: 'browser.extract',
+            args: { type: 'extract', instructions: 'Find the capital of Freedonia' },
+          },
+        ],
       });
     }
 

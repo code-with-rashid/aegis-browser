@@ -1,8 +1,14 @@
-import { createActionRunner, createChromeTabManager, type ExecutorContext } from '@aegis/actions';
+import {
+  createActionRunner,
+  createChromeTabManager,
+  createDefaultToolRegistry,
+  type ExecutorContext,
+} from '@aegis/actions';
 import {
   createCriticService,
   createNavigatorService,
   createPlannerService,
+  createToolCallActService,
   createVerifierService,
   type LoopServices,
 } from '@aegis/agent';
@@ -76,17 +82,17 @@ export async function buildLoopServices(
   const tabManager = createChromeTabManager(tabId);
   const executorContext: ExecutorContext = { session, tabManager };
   const actionRunner = createActionRunner();
+  const toolRegistry = createDefaultToolRegistry();
   const policyEngine = createPolicyEngine(createPolicyStore(storage));
   const checkPolicy = createPolicyService(policyEngine, () => resolveOrigin(tabId));
 
   const services: LoopServices = {
     perceive: (input) => getPerceptionPayload(input.session, { goal: input.goal }),
     plan: createPlannerService(modelRouter),
-    decide: createNavigatorService(modelRouter),
+    decide: createNavigatorService(modelRouter, toolRegistry),
     checkPolicy,
     checkAlignment: createCriticService(modelRouter),
-    act: (actions, context, signal) =>
-      actionRunner.run(actions, context, signal !== undefined ? { signal } : {}),
+    act: createToolCallActService(actionRunner, toolRegistry),
     verify: createVerifierService(modelRouter),
   };
 

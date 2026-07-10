@@ -39,10 +39,11 @@ export function buildTraceStep(
     return undefined;
   }
 
-  const actions: TraceActionEntry[] = context.lastRunSummary.actions.map((outcome, index) => {
+  const actions: TraceActionEntry[] = context.lastRunSummary.toolCalls.map((outcome, index) => {
     const action = context.proposedActions[index];
     return {
-      description: action !== undefined ? describeAction(action, context.perception) : outcome.type,
+      description:
+        action !== undefined ? describeAction(action, context.perception) : outcome.toolId,
       succeeded: outcome.succeeded,
       errorMessage: outcome.errorMessage,
     };
