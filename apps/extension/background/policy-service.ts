@@ -135,7 +135,7 @@ function originToCheck(
  * Adapts `@aegis/security`'s `PolicyEngine` (one already-classified risk at a time,
  * three-way allow/confirm/deny) to `@aegis/agent`'s `PolicyService` port (a batch of tool
  * calls, `{decision, reason?}`) — the composition-root wiring both packages' ADRs (0010,
- * 0011, 0082) deferred, since `@aegis/agent` and `@aegis/security` are siblings that
+ * 0011, 0030) deferred, since `@aegis/agent` and `@aegis/security` are siblings that
  * never import each other directly. The batch's overall decision is the strictest of any
  * single tool call's (`deny` > `confirm` > `allow`), regardless of the order they were
  * proposed in — a `deny` later in the list must still block the whole batch.
