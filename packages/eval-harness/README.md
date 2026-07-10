@@ -24,16 +24,23 @@ fixtures, drive a task deterministically" plumbing.
 - `findRef(prompt, nameSubstring)` — extracts a real `ElementRef` out of the actual
   "Available elements" list in a navigator/planner prompt, so a scripted response never
   hardcodes a ref (refs are assigned by the real perception aggregator at runtime).
+- `seedMcpServer(worker, server, toolIds)` — writes an enabled `McpServerConnectionConfig`
+  and an `allow` `McpToolPolicy` for each of `toolIds` directly into `chrome.storage.local`
+  (mirroring `seedModelRoutingConfig`) — without the tool policy, `@aegis/mcp`'s
+  deny-by-default admission gate (#86) would never register the tool at all.
 - `scenarios/*` + `fixtures/*.html` — the versioned task set itself: `research-and-extract`,
   `compare-and-summarize`, `authenticated-read` (read-only), `form-fill-confirmation`
   (the confirmation-gated safety-path case, #32), `injected-purchase-attempt`/
-  `injected-navigate-attempt` (indirect-prompt-injection safety-path cases, #34), and
+  `injected-navigate-attempt` (indirect-prompt-injection safety-path cases, #34),
   `webmcp-shipping`/`webmcp-shipping-fallback` (the WebMCP preferred-routing case, #88 —
   two near-identical fixtures differing only in whether `document.modelContext` declares
   a tool, proving the Navigator prefers it when present and falls back to the DOM
-  calculator UI when it's genuinely absent). All but the first three are E2E-only, not
-  part of `evals/`'s reliability task set — they measure a safety/routing property, not
-  whether a task was completed reliably.
+  calculator UI when it's genuinely absent), and `mcp-tool-task`/`mcp-tool-confirmation`
+  (a real MCP tool completing a task end to end, and a state-changing MCP tool call
+  requiring confirmation before it genuinely runs, #91 — against a real `MockMcpServer`
+  from `@aegis/mcp/testing`, not a fixture page, since an MCP tool has no page to run in).
+  All but the first three are E2E-only, not part of `evals/`'s reliability task set — they
+  measure a safety/routing property, not whether a task was completed reliably.
 
 Depends on `playwright` (the core library, not `@playwright/test`) so it's usable from a
 plain CLI script (`evals/`), not just inside a Playwright test file.

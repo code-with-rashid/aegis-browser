@@ -15,6 +15,8 @@ export type { StaticServerHandle } from './static-server';
 export { startStaticServer } from './static-server';
 
 export { seedModelRoutingConfig } from './seed-chrome-storage';
+export type { McpServerSeed } from './seed-mcp-chrome-storage';
+export { seedMcpServer } from './seed-mcp-chrome-storage';
 export { findRef } from './find-ref';
 export { FIXTURES_DIR } from './fixtures-dir';
 
@@ -61,3 +63,15 @@ export {
   createWebMcpShippingResponder,
   createWebMcpShippingFallbackResponder,
 } from './scenarios/webmcp-shipping';
+export {
+  MCP_TOOL_TASK,
+  MCP_TOOL_TASK_FIXTURE,
+  MCP_TOOL_TASK_EXPECTED_SUMMARY,
+  MCP_TOOL_ID,
+  createMcpToolTaskResponder,
+} from './scenarios/mcp-tool-task';
+export {
+  MCP_TOOL_CONFIRMATION_TASK,
+  MCP_TOOL_CONFIRMATION_TOOL_ID,
+  createMcpToolConfirmationResponder,
+} from './scenarios/mcp-tool-confirmation';

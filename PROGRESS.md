@@ -92,7 +92,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M12 — Integration & release
 
-- [ ] #91 P2-12 E2E: MCP + WebMCP tasks — blocked by: #88, #90
+- [x] #91 P2-12 E2E: MCP + WebMCP tasks — blocked by: #88, #90
 - [ ] #92 P2-13 Tool-use evals + security suite — blocked by: #91
 - [ ] #93 P2-14 Docs + v0.2 — blocked by: #92
 
@@ -367,6 +367,16 @@ PendingToolCallPreview[]` field (any source, via `describeToolCall` + `summarize
   preview needs both. `trace-list.tsx` gains a visible source badge and an expandable
   "Show args" (toolId + argsSummary) per action, matching the existing "Show raw
   perception" pattern.
+- [0039](docs/adr/0039-e2e-mcp-webmcp-tool-tasks.md) — E2E: MCP + WebMCP tasks (Phase 2,
+  issue #91): the WebMCP half was already covered by #88's existing spec; the new work is
+  `apps/extension/e2e/mcp-tool-task.spec.ts` against a real `MockMcpServer` — one scenario
+  completing a task via a `read`-risk tool with zero page interaction, one proving a
+  `state_changing` tool call (no annotations, fail-safe risk inference) genuinely blocks on
+  confirmation. Since an MCP tool has no page DOM to check, the "real state, not
+  self-reported status" proof (ADR 0020's convention) is the mock server's own call count
+  instead — `orderCalls === 0` pre-approval, `=== 1` only after. New `seedMcpServer`
+  (`@aegis/eval-harness`) mirrors `seedModelRoutingConfig`'s shape without taking on
+  `@aegis/mcp` as a dependency.
 
 ## Notes
 
