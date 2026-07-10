@@ -2,9 +2,9 @@
 
 Typed browser actions. Hosts the Zod action schemas (`click`, `input_text`, `scroll`,
 `navigate`, tab management, dropdowns, keys, `wait`, `extract`, `done`) each tagged with a
-risk level (`read | navigate | input | state_changing`), the extensible `ActionRegistry`,
-the CDP-backed executors (ref → node → real input events), and the action runner
-(sequential execution, bounded retry, stall detection, abort).
+risk level (`read | navigate | input | state_changing`), the unified `Tool`/`ToolRegistry`
+abstraction (#80), the CDP-backed executors (ref → node → real input events), and the
+action runner (sequential execution, bounded retry, stall detection, abort).
 
 ## Action schemas & risk classifier
 
@@ -22,11 +22,40 @@ a coarse, fast, keyword-based check; the alignment critic (#23) and per-site pol
 (#21) apply deeper judgment on top. `read`/`navigate` actions are never elevated — no
 target could make reading or navigating destructive.
 
-`ActionRegistry` (`registry.ts`) is a runtime `type -> {schema, baseRisk}` map, extensible
-so MCP tool-actions (Phase 2) can `register()` alongside the 14 built-ins without changing
-this API; an unregistered type classifies as the most restrictive risk (`state_changing`),
-deny-by-default. For compile-time-typed access to just the built-ins, use `ActionSchema` /
-`validateAction` / `classifyActionRisk` directly instead of going through the registry.
+`validateAction` (`validate-action.ts`) validates a raw action against the compile-time-typed
+`ActionSchema` union directly, when you want a real `Action` rather than going through the
+registry below.
+
+## Tool abstraction
+
+`Tool` (`tool.ts`) is the one shape every callable capability implements, regardless of
+where it comes from: a built-in browser action (`source: "browser"`), a tool exposed by an
+external MCP server (`source: "mcp"`, #85), or a tool a page declares via WebMCP
+(`source: "webmcp"`, #87). Each `Tool` has a namespaced `id` (e.g. `"browser.click"`,
+`"mcp.github.create_issue"`), a `description`, a Zod `inputSchema` validated before
+`execute` ever runs, a static `risk` (`read | navigate | input | state_changing`), and an
+`execute(args, ctx)` that returns a `ToolResult` (a `Result<unknown, ToolExecutionError>` —
+typed failure, never a thrown string).
+
+`ToolContext` is currently identical to `ExecutorContext` (the live CDP session + tab
+manager a `browser`-source tool needs); `mcp`/`webmcp`-source tools capture their own
+transport (an `McpClient`, a page binding) via closure at registration time and can ignore
+it.
+
+`ToolRegistry` (`registry.ts`) is a runtime `id -> Tool` map — `register()`/`unregister()`,
+`get()`/`has()`, `list({source?, risk?})` to filter, and `call(id, args, ctx)` to validate
+
+- execute in one step. An unknown `id` or schema-invalid `args` come back as a typed
+  `ToolExecutionError` (`TOOL_UNKNOWN` / `TOOL_INVALID_ARGS`) rather than throwing, so a
+  hallucinated tool call from the model degrades to a normal error the agent loop can replan
+  from.
+
+`createBrowserTools()` / `createDefaultToolRegistry()` (`browser-tools.ts`) build one `Tool`
+per built-in action (`browser.<type>`), each wrapping `executeAction` unchanged — risk
+matches the existing base-risk table in `risk.ts` (contextual elevation to
+`state_changing` via element-name keywords still runs separately through
+`classifyActionRisk`/`elevateRisk`, since a `Tool`'s `risk` is static but element-name
+context is only known at call time).
 
 ## CDP action executors
 

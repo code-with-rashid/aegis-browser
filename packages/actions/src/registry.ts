@@ -1,156 +1,76 @@
-import { AegisError, err, ok, type Result } from '@aegis/shared';
-import type { z } from 'zod';
+import { err } from '@aegis/shared';
 
-import { elevateRisk, type ActionRisk, type ActionRiskContext } from './risk';
-import {
-  ClickActionSchema,
-  CloseTabActionSchema,
-  DoneActionSchema,
-  ExtractActionSchema,
-  GetDropdownOptionsActionSchema,
-  GoBackActionSchema,
-  InputTextActionSchema,
-  NavigateActionSchema,
-  OpenTabActionSchema,
-  ScrollActionSchema,
-  SelectDropdownOptionActionSchema,
-  SendKeysActionSchema,
-  SwitchTabActionSchema,
-  WaitActionSchema,
-  type Action,
-} from './schema';
-import { ActionSchema } from './schema';
+import type { Tool, ToolContext, ToolResult, ToolSource } from './tool';
+import { ToolExecutionError } from './tool';
+import type { ActionRisk } from './risk';
 
-export type ActionValidationErrorCode = 'ACTION_UNKNOWN_TYPE' | 'ACTION_INVALID_PARAMS';
-
-/** Typed error raised when validating a raw action against a registry or schema fails. */
-export class ActionValidationError extends AegisError {
-  readonly code: ActionValidationErrorCode;
-
-  constructor(code: ActionValidationErrorCode, message: string, options?: { cause?: unknown }) {
-    super(message, options);
-    this.code = code;
-  }
-}
-
-/** A validated action of any registered type — a built-in, or a future MCP tool-action. */
-export interface RegisteredAction {
-  readonly type: string;
-  readonly [key: string]: unknown;
-}
-
-/** One registered action type: its schema and base risk. */
-export interface ActionDescriptor {
-  readonly type: string;
-  readonly schema: z.ZodType;
-  readonly baseRisk: ActionRisk;
-}
-
-function extractType(raw: unknown): string | undefined {
-  if (typeof raw !== 'object' || raw === null) {
-    return undefined;
-  }
-  const candidate = raw as { type?: unknown };
-  return typeof candidate.type === 'string' ? candidate.type : undefined;
+/** Optional filter for {@link ToolRegistry.list}. */
+export interface ToolListFilter {
+  readonly source?: ToolSource;
+  readonly risk?: ActionRisk;
 }
 
 /**
- * A runtime registry of action types, their Zod schemas, and base risk — extensible so
- * MCP tool-actions (Phase 2) can register alongside the 14 built-ins without changing
- * this API. For compile-time-typed access to just the built-ins, use {@link ActionSchema}
- * / {@link validateAction} / `classifyActionRisk` directly instead.
+ * A runtime registry of {@link Tool}s from any source — built-in browser actions,
+ * MCP-server tools (#85), or WebMCP page tools (#87) — so the Navigator (`@aegis/agent`)
+ * can list, filter, and call them uniformly regardless of where a tool came from.
  */
-export class ActionRegistry {
-  private readonly descriptors = new Map<string, ActionDescriptor>();
+export class ToolRegistry {
+  private readonly tools = new Map<string, Tool>();
 
-  register(descriptor: ActionDescriptor): void {
-    this.descriptors.set(descriptor.type, descriptor);
+  register(tool: Tool): void {
+    this.tools.set(tool.id, tool);
   }
 
-  get(type: string): ActionDescriptor | undefined {
-    return this.descriptors.get(type);
+  /** Removes a previously registered tool, e.g. when a WebMCP page tool tears down on navigation. */
+  unregister(id: string): void {
+    this.tools.delete(id);
   }
 
-  list(): readonly ActionDescriptor[] {
-    return [...this.descriptors.values()];
+  get(id: string): Tool | undefined {
+    return this.tools.get(id);
   }
 
-  validate(raw: unknown): Result<RegisteredAction, ActionValidationError> {
-    const type = extractType(raw);
-    if (type === undefined) {
-      return err(
-        new ActionValidationError(
-          'ACTION_INVALID_PARAMS',
-          'Action is missing a string "type" field',
-        ),
-      );
+  has(id: string): boolean {
+    return this.tools.has(id);
+  }
+
+  /** Lists registered tools, optionally filtered by `source` and/or `risk`. */
+  list(filter: ToolListFilter = {}): readonly Tool[] {
+    return [...this.tools.values()].filter((tool) => {
+      if (filter.source !== undefined && tool.source !== filter.source) {
+        return false;
+      }
+      if (filter.risk !== undefined && tool.risk !== filter.risk) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /**
+   * Validates `args` against the tool's `inputSchema` and, if valid, executes it.
+   * Unknown tool ids and schema-invalid args are returned as a typed
+   * {@link ToolExecutionError} — never thrown — so a hallucinated tool call from the
+   * model degrades to a normal error the agent loop can replan from.
+   */
+  async call(id: string, args: unknown, ctx: ToolContext): Promise<ToolResult> {
+    const tool = this.tools.get(id);
+    if (!tool) {
+      return err(new ToolExecutionError('TOOL_UNKNOWN', `Unknown tool "${id}"`));
     }
 
-    const descriptor = this.descriptors.get(type);
-    if (!descriptor) {
-      return err(new ActionValidationError('ACTION_UNKNOWN_TYPE', `Unknown action type "${type}"`));
-    }
-
-    const parsed = descriptor.schema.safeParse(raw);
+    const parsed = tool.inputSchema.safeParse(args);
     if (!parsed.success) {
       return err(
-        new ActionValidationError(
-          'ACTION_INVALID_PARAMS',
-          `Invalid params for action "${type}": ${parsed.error.message}`,
+        new ToolExecutionError(
+          'TOOL_INVALID_ARGS',
+          `Invalid args for tool "${id}": ${parsed.error.message}`,
           { cause: parsed.error },
         ),
       );
     }
 
-    return ok(parsed.data as RegisteredAction);
+    return tool.execute(parsed.data, ctx);
   }
-
-  /** Classifies risk by registered type, defaulting unknown types to the most restrictive risk. */
-  classify(type: string, context: ActionRiskContext = {}): ActionRisk {
-    const baseRisk = this.descriptors.get(type)?.baseRisk ?? 'state_changing';
-    return elevateRisk(baseRisk, context);
-  }
-}
-
-const BUILT_IN_DESCRIPTORS: readonly ActionDescriptor[] = [
-  { type: 'click', schema: ClickActionSchema, baseRisk: 'input' },
-  { type: 'input_text', schema: InputTextActionSchema, baseRisk: 'input' },
-  { type: 'scroll', schema: ScrollActionSchema, baseRisk: 'input' },
-  { type: 'navigate', schema: NavigateActionSchema, baseRisk: 'navigate' },
-  { type: 'go_back', schema: GoBackActionSchema, baseRisk: 'navigate' },
-  { type: 'open_tab', schema: OpenTabActionSchema, baseRisk: 'navigate' },
-  { type: 'switch_tab', schema: SwitchTabActionSchema, baseRisk: 'navigate' },
-  { type: 'close_tab', schema: CloseTabActionSchema, baseRisk: 'navigate' },
-  { type: 'get_dropdown_options', schema: GetDropdownOptionsActionSchema, baseRisk: 'read' },
-  { type: 'select_dropdown_option', schema: SelectDropdownOptionActionSchema, baseRisk: 'input' },
-  { type: 'send_keys', schema: SendKeysActionSchema, baseRisk: 'input' },
-  { type: 'wait', schema: WaitActionSchema, baseRisk: 'read' },
-  { type: 'extract', schema: ExtractActionSchema, baseRisk: 'read' },
-  { type: 'done', schema: DoneActionSchema, baseRisk: 'read' },
-];
-
-/** Builds an {@link ActionRegistry} pre-populated with all 14 built-in action types. */
-export function createDefaultActionRegistry(): ActionRegistry {
-  const registry = new ActionRegistry();
-  for (const descriptor of BUILT_IN_DESCRIPTORS) {
-    registry.register(descriptor);
-  }
-  return registry;
-}
-
-/** Validates a raw action against the 14 built-in schemas, with full compile-time typing. */
-export function validateAction(raw: unknown): Result<Action, ActionValidationError> {
-  const parsed = ActionSchema.safeParse(raw);
-  if (!parsed.success) {
-    return err(
-      new ActionValidationError(
-        'ACTION_INVALID_PARAMS',
-        `Invalid action: ${parsed.error.message}`,
-        {
-          cause: parsed.error,
-        },
-      ),
-    );
-  }
-  return ok(parsed.data);
 }
