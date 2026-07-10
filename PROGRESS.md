@@ -69,7 +69,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M8 — Tool abstraction
 
-- [ ] #80 P2-1 Unified `Tool` + `ToolRegistry` — blocked by: none
+- [x] #80 P2-1 Unified `Tool` + `ToolRegistry` — blocked by: none
 - [ ] #81 P2-2 Tool-calling in the agent loop — blocked by: #80
 - [ ] #82 P2-3 Tool risk gating — blocked by: #81
 
@@ -270,3 +270,4 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - Phase 2 (tool-use: MCP + WebMCP) kicked off 2026-07-10 per `PHASE_2_PROMPT.md`.
   Milestones M8–M12 and issues #80–#93 created (backlog P2-1…P2-14 map 1:1 to
   #80…#93 in listed order). Work proceeds via the same per-issue loop as Phase 1.
+- #80 (unified `Tool`/`ToolRegistry`) merged 2026-07-10 — see ADR 0028.

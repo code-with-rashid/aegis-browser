@@ -1,100 +1,116 @@
-import { isErr, isOk } from '@aegis/shared';
+import { isErr, isOk, ok } from '@aegis/shared';
+import { createFakeCdp } from '@aegis/perception';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { ActionRegistry, createDefaultActionRegistry, validateAction } from './registry';
+import { createFakeTabManager } from './tabs/fake-tab-manager';
+import { createDefaultToolRegistry } from './browser-tools';
+import { ToolRegistry } from './registry';
+import type { ToolContext } from './tool';
 
-describe('createDefaultActionRegistry', () => {
-  const BUILT_IN_TYPES = [
-    'click',
-    'input_text',
-    'scroll',
-    'navigate',
-    'go_back',
-    'open_tab',
-    'switch_tab',
-    'close_tab',
-    'get_dropdown_options',
-    'select_dropdown_option',
-    'send_keys',
-    'wait',
-    'extract',
-    'done',
-  ];
+function createContext(): ToolContext {
+  return {
+    session: createFakeCdp(1, { onSend: () => ok(undefined) }),
+    tabManager: createFakeTabManager(1),
+  };
+}
 
-  it('registers all 14 built-in action types', () => {
-    const registry = createDefaultActionRegistry();
+describe('createDefaultToolRegistry', () => {
+  it('registers all 14 built-in browser tools', () => {
+    const registry = createDefaultToolRegistry();
     expect(registry.list()).toHaveLength(14);
-    for (const type of BUILT_IN_TYPES) {
-      expect(registry.get(type)).toBeDefined();
-    }
+    expect(registry.has('browser.click')).toBe(true);
+    expect(registry.has('browser.done')).toBe(true);
   });
 
-  it('validates a well-formed built-in action', () => {
-    const registry = createDefaultActionRegistry();
-    const result = registry.validate({ type: 'click', ref: 'e1' });
-    expect(isOk(result) && result.value.type).toBe('click');
+  it('filters by source', () => {
+    const registry = createDefaultToolRegistry();
+    expect(registry.list({ source: 'browser' })).toHaveLength(14);
+    expect(registry.list({ source: 'mcp' })).toHaveLength(0);
   });
 
-  it('rejects an action with an unknown type', () => {
-    const registry = createDefaultActionRegistry();
-    const result = registry.validate({ type: 'teleport' });
-    expect(isErr(result) && result.error.code).toBe('ACTION_UNKNOWN_TYPE');
+  it('filters by risk', () => {
+    const registry = createDefaultToolRegistry();
+    const readTools = registry.list({ risk: 'read' });
+    expect(readTools.map((t) => t.id).sort()).toEqual([
+      'browser.done',
+      'browser.extract',
+      'browser.get_dropdown_options',
+      'browser.wait',
+    ]);
   });
 
-  it('rejects an action missing a "type" field', () => {
-    const registry = createDefaultActionRegistry();
-    const result = registry.validate({ ref: 'e1' });
-    expect(isErr(result) && result.error.code).toBe('ACTION_INVALID_PARAMS');
+  it('calls a registered tool and returns its typed result', async () => {
+    const registry = createDefaultToolRegistry();
+    const ctx = createContext();
+
+    const result = await registry.call(
+      'browser.done',
+      { type: 'done', success: true, summary: 'ok' },
+      ctx,
+    );
+
+    expect(isOk(result) && result.value).toEqual({ kind: 'done', success: true, summary: 'ok' });
   });
 
-  it('rejects a known type with invalid params', () => {
-    const registry = createDefaultActionRegistry();
-    const result = registry.validate({ type: 'click' }); // missing ref
-    expect(isErr(result) && result.error.code).toBe('ACTION_INVALID_PARAMS');
+  it('rejects an unknown tool id', async () => {
+    const registry = createDefaultToolRegistry();
+    const ctx = createContext();
+
+    const result = await registry.call('browser.teleport', {}, ctx);
+
+    expect(isErr(result) && result.error.code).toBe('TOOL_UNKNOWN');
   });
 
-  it('classifies a built-in type consistently with classifyActionRisk', () => {
-    const registry = createDefaultActionRegistry();
-    expect(registry.classify('click')).toBe('input');
-    expect(registry.classify('click', { elementName: 'Submit Order' })).toBe('state_changing');
-    expect(registry.classify('navigate')).toBe('navigate');
-  });
+  it('rejects schema-invalid args for a known tool', async () => {
+    const registry = createDefaultToolRegistry();
+    const ctx = createContext();
 
-  it('defaults an unregistered type to the most restrictive risk', () => {
-    const registry = createDefaultActionRegistry();
-    expect(registry.classify('some_future_mcp_tool')).toBe('state_changing');
+    const result = await registry.call('browser.click', { type: 'click' }, ctx); // missing ref
+
+    expect(isErr(result) && result.error.code).toBe('TOOL_INVALID_ARGS');
   });
 });
 
-describe('ActionRegistry extensibility (MCP-style custom registration)', () => {
-  it('lets a caller register a new action type alongside the built-ins', () => {
-    const registry = createDefaultActionRegistry();
-    const customSchema = z.object({ type: z.literal('custom_tool'), query: z.string() });
+describe('ToolRegistry extensibility (MCP/WebMCP-style custom registration)', () => {
+  it('lets a caller register a tool from another source', async () => {
+    const registry = new ToolRegistry();
+    const customSchema = z.object({ query: z.string() });
 
-    registry.register({ type: 'custom_tool', schema: customSchema, baseRisk: 'read' });
+    registry.register({
+      id: 'mcp.weather.lookup',
+      source: 'mcp',
+      description: 'Look up the weather.',
+      inputSchema: customSchema,
+      risk: 'read',
+      execute: (args) => Promise.resolve(ok({ echoed: args })),
+    });
 
-    const result = registry.validate({ type: 'custom_tool', query: 'weather' });
-    expect(isOk(result) && result.value['query']).toBe('weather');
-    expect(registry.classify('custom_tool')).toBe('read');
+    const ctx = createContext();
+    const result = await registry.call('mcp.weather.lookup', { query: 'weather' }, ctx);
+
+    expect(isOk(result) && result.value).toEqual({ echoed: { query: 'weather' } });
+    expect(registry.list({ source: 'mcp' })).toHaveLength(1);
+  });
+
+  it('unregisters a tool', () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      id: 'webmcp.checkout',
+      source: 'webmcp',
+      description: 'Checkout.',
+      inputSchema: z.object({}),
+      risk: 'state_changing',
+      execute: () => Promise.resolve(ok(undefined)),
+    });
+
+    expect(registry.has('webmcp.checkout')).toBe(true);
+    registry.unregister('webmcp.checkout');
+    expect(registry.has('webmcp.checkout')).toBe(false);
   });
 
   it('starts empty when constructed directly (no built-ins)', () => {
-    const registry = new ActionRegistry();
+    const registry = new ToolRegistry();
     expect(registry.list()).toHaveLength(0);
-    const result = registry.validate({ type: 'click', ref: 'e1' });
-    expect(isErr(result) && result.error.code).toBe('ACTION_UNKNOWN_TYPE');
-  });
-});
-
-describe('validateAction', () => {
-  it('validates a well-formed built-in action with full typing', () => {
-    const result = validateAction({ type: 'done', success: true, summary: 'ok' });
-    expect(isOk(result) && result.value.type).toBe('done');
-  });
-
-  it('rejects an invalid action', () => {
-    const result = validateAction({ type: 'done' });
-    expect(isErr(result) && result.error.code).toBe('ACTION_INVALID_PARAMS');
   });
 });

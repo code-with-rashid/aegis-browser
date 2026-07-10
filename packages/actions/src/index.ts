@@ -3,13 +3,23 @@ export * from './schema';
 export type { ActionRisk, ActionRiskContext } from './risk';
 export { STATE_CHANGING_KEYWORDS, classifyActionRisk, elevateRisk } from './risk';
 
-export type { ActionValidationErrorCode, RegisteredAction, ActionDescriptor } from './registry';
-export {
-  ActionValidationError,
-  ActionRegistry,
-  createDefaultActionRegistry,
-  validateAction,
-} from './registry';
+export type { ActionValidationErrorCode } from './validate-action';
+export { ActionValidationError, validateAction } from './validate-action';
+
+export type {
+  ToolSource,
+  ToolRisk,
+  ToolContext,
+  ToolResult,
+  ToolExecutionErrorCode,
+  Tool,
+} from './tool';
+export { ToolExecutionError } from './tool';
+
+export type { ToolListFilter } from './registry';
+export { ToolRegistry } from './registry';
+
+export { createBrowserTools, createDefaultToolRegistry } from './browser-tools';
 
 export type {
   ActionExecutionErrorCode,
