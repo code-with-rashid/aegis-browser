@@ -1,20 +1,25 @@
-import { ActionExecutionError, type RunOutcome } from '@aegis/actions';
+import { ToolExecutionError } from '@aegis/actions';
 import { err, ok, toElementRef } from '@aegis/shared';
 import { describe, expect, it } from 'vitest';
 
 import { summarizeRunOutcome } from './run-summary';
+import type { ToolRunOutcome } from './services';
 
 describe('summarizeRunOutcome', () => {
   it('summarizes a completed run with only successes', () => {
-    const outcome: RunOutcome = {
+    const outcome: ToolRunOutcome = {
       kind: 'completed',
       results: [
         {
-          action: { type: 'click', ref: toElementRef('ax:1') },
+          toolCall: { toolId: 'browser.click', args: { type: 'click', ref: toElementRef('ax:1') } },
           attempt: 1,
           outcome: ok({ kind: 'click' }),
         },
-        { action: { type: 'wait', ms: 5 }, attempt: 1, outcome: ok({ kind: 'wait' }) },
+        {
+          toolCall: { toolId: 'browser.wait', args: { type: 'wait', ms: 5 } },
+          attempt: 1,
+          outcome: ok({ kind: 'wait' }),
+        },
       ],
     };
 
@@ -22,22 +27,28 @@ describe('summarizeRunOutcome', () => {
 
     expect(summary).toEqual({
       kind: 'completed',
-      actions: [
-        { type: 'click', succeeded: true },
-        { type: 'wait', succeeded: true },
+      toolCalls: [
+        { toolId: 'browser.click', succeeded: true },
+        { toolId: 'browser.wait', succeeded: true },
       ],
     });
   });
 
-  it('extracts error code/message as plain strings for a failed action', () => {
-    const outcome: RunOutcome = {
+  it('extracts error code/message as plain strings for a failed tool call', () => {
+    const outcome: ToolRunOutcome = {
       kind: 'failed',
-      failedAction: { type: 'navigate', url: 'https://example.com' },
+      failedToolCall: {
+        toolId: 'browser.navigate',
+        args: { type: 'navigate', url: 'https://example.com' },
+      },
       results: [
         {
-          action: { type: 'navigate', url: 'https://example.com' },
+          toolCall: {
+            toolId: 'browser.navigate',
+            args: { type: 'navigate', url: 'https://example.com' },
+          },
           attempt: 3,
-          outcome: err(new ActionExecutionError('CDP_SEND_FAILED', 'boom')),
+          outcome: err(new ToolExecutionError('TOOL_EXECUTION_FAILED', 'boom')),
         },
       ],
     };
@@ -45,20 +56,25 @@ describe('summarizeRunOutcome', () => {
     const summary = summarizeRunOutcome(outcome);
 
     expect(summary.kind).toBe('failed');
-    expect(summary.actions).toEqual([
-      { type: 'navigate', succeeded: false, errorCode: 'CDP_SEND_FAILED', errorMessage: 'boom' },
+    expect(summary.toolCalls).toEqual([
+      {
+        toolId: 'browser.navigate',
+        succeeded: false,
+        errorCode: 'TOOL_EXECUTION_FAILED',
+        errorMessage: 'boom',
+      },
     ]);
   });
 
   it('produces no Error instances anywhere in the summary (JSON-safe)', () => {
-    const outcome: RunOutcome = {
+    const outcome: ToolRunOutcome = {
       kind: 'stalled',
-      stalledOn: { type: 'click', ref: toElementRef('ax:1') },
+      stalledOn: { toolId: 'browser.click', args: { type: 'click', ref: toElementRef('ax:1') } },
       results: [
         {
-          action: { type: 'click', ref: toElementRef('ax:1') },
+          toolCall: { toolId: 'browser.click', args: { type: 'click', ref: toElementRef('ax:1') } },
           attempt: 1,
-          outcome: err(new ActionExecutionError('ELEMENT_DETACHED', 'stale ref')),
+          outcome: err(new ToolExecutionError('TOOL_EXECUTION_FAILED', 'stale ref')),
         },
       ],
     };

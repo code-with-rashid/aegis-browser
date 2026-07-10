@@ -12,7 +12,7 @@ const baseInput: VerifyInput = {
   task: 'Buy oat milk',
   subGoal: 'Add oat milk to cart',
   perception: perceptionFixture('Cart now shows 1 item: Oat Milk'),
-  runSummary: { kind: 'completed', actions: [{ type: 'click', succeeded: true }] },
+  runSummary: { kind: 'completed', toolCalls: [{ toolId: 'browser.click', succeeded: true }] },
 };
 
 describe('VERIFIER_SYSTEM_PROMPT', () => {
@@ -29,9 +29,9 @@ describe('buildVerifierPrompt', () => {
     expect(prompt).toContain('Sub-goal just attempted: Add oat milk to cart');
   });
 
-  it('lists the actions that ran', () => {
+  it('lists the tool calls that ran', () => {
     const prompt = buildVerifierPrompt(baseInput);
-    expect(prompt).toContain('- click: succeeded');
+    expect(prompt).toContain('- browser.click: succeeded');
   });
 
   it('wraps sanitized fresh page content as untrusted data', () => {

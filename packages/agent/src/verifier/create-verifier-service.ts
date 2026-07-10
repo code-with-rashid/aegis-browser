@@ -32,7 +32,7 @@ export function createVerifierService(
   return async (input: VerifyInput, signal?: AbortSignal) => {
     if (
       input.runSummary.kind !== 'completed' ||
-      input.runSummary.actions.some((a) => !a.succeeded)
+      input.runSummary.toolCalls.some((tc) => !tc.succeeded)
     ) {
       const output: VerifyOutput = { outcome: 'failed', taskComplete: false };
       return ok(output);

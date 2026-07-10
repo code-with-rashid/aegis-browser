@@ -127,9 +127,11 @@ restart, rather than silently resuming as if approved).
 in the same transition actions that already run, not a new machine concept.
 `buildTraceStep(context, stepNumber)` (`loop/trace.ts`) is a pure function turning one
 snapshot's context into a `TraceStep`: it zips `context.proposedActions` (real `Action`s,
-refs included) with `context.lastRunSummary.actions` (success/error info) by index, using
-`describeAction` (from `loop/confirmation.ts`) for each action's human-readable
-description — the same description a confirmation preview would show. Returns `undefined`
+refs included) with `context.lastRunSummary.toolCalls` (success/error info, by `toolId`)
+by index, using `describeAction` (from `loop/confirmation.ts`) for each action's
+human-readable description — the same description a confirmation preview would show, or
+the raw `toolId` when there's no matching browser action (e.g. a non-browser tool call,
+until #90 gives tool calls their own distinct trace rendering). Returns `undefined`
 when there's nothing to report yet (`lastRunSummary` unset). See
 `docs/adr/0014-action-trace-log-ui.md`: accumulating a list of these into a persisted,
 broadcastable trace is composition-root work (`apps/extension/background/run-manager.ts`),
@@ -167,32 +169,50 @@ machine reads; the rest rides along for the trace UI (#26). Any failure (provide
 resolution, or `generateStructured` exhausting its retries) becomes a `PLANNER_FAILED`
 `AgentError` with the original error as `cause`.
 
-## The Navigator
+## The Navigator (and tool-calling, #81)
 
-`createNavigatorService(modelRouter, options?)` (`navigator/create-navigator-service.ts`)
-builds the `NavigatorService` the loop machine invokes in `deciding`. It resolves the
-`navigator` role's model (low default temperature — narrow, low-variance choices, not
-open-ended reasoning) and calls `generateStructured` with `NavigatorOutputSchema`
-(`navigator/schema.ts`) — §5's `AgentBrain` shape with `actions` (not `plan`).
+`createNavigatorService(modelRouter, toolRegistry, options?)`
+(`navigator/create-navigator-service.ts`) builds the `NavigatorService` the loop machine
+invokes in `deciding`. It resolves the `navigator` role's model (low default temperature —
+narrow, low-variance choices, not open-ended reasoning) and calls `generateStructured`
+with `NavigatorOutputSchema` (`navigator/schema.ts`) — §5's `AgentBrain` shape with
+`toolCalls` (not `plan`): a list of `{toolId, args}` pairs, `args` intentionally
+`z.unknown()` in this wire schema since it's tool-specific. `toolRegistry.list()` is
+re-read on every call (not cached at construction), so a dynamically-changing registry —
+a WebMCP tool appearing/disappearing per page, #87 — is always reflected; the prompt
+(`navigator/prompt.ts`) lists each available tool's `id`, description, and args JSON
+Schema (rendered with `unrepresentable: 'any'`, since a browser tool's schema brands
+`ref` via `.transform()`, which JSON Schema can't represent — the separate "Available
+elements" list already tells the model what a ref looks like). This supersedes ADR 0006's
+transform-free `LlmActionSchema` mirror, which is no longer needed — see
+`docs/adr/0029-tool-calling-agent-loop.md`.
 
-`actions` validates against `LlmActionSchema` (`navigator/llm-action-schema.ts`), a
-transform-free mirror of `@aegis/actions`' `ActionSchema` — see
-`docs/adr/0006-navigator-llm-action-schema-mirror.md` for why a mirror is needed at all
-(Zod's `z.toJSONSchema`, which `generateStructured` uses to build format instructions,
-can't represent the `.transform()` that brands `ref` as an `ElementRef`). Once
-`generateStructured` succeeds, the raw actions are re-parsed through the real
-`ActionSchema` to get properly-branded `Action`s.
+`resolveToolCalls` (`navigator/resolve-tool-calls.ts`) validates each raw `{toolId, args}`
+against that tool's own `inputSchema`, producing both the authoritative `toolCalls` and a
+derived `actions: Action[]` (the `source: "browser"` subset, re-parsed through the real,
+branded action schemas) — `actions` is what feeds the policy engine, alignment critic,
+confirmation UI, and trace, none of which are tool-call-aware yet (#82, #90 generalize
+them). An unknown `toolId` or schema-invalid `args` is collected as an issue rather than
+thrown.
 
-`findHallucinatedRefs` (`navigator/hallucinated-refs.ts`) then checks every action's
-`ref` (where one applies — `click`/`input_text`/`get_dropdown_options`/
-`select_dropdown_option` always; `scroll`/`send_keys` when given) against
-`perception.elements`. A schema-valid action referencing a ref the page never actually
-had is a hallucination, not a formatting error — `generateStructured`'s own retry can't
-catch it. The Navigator gets its own bounded retry loop on top: a hallucination triggers
-one corrective re-prompt (telling the model exactly which refs were invalid), and if it
-still can't self-correct, the decision resolves as `{ actions: [], stuck: true }` —
-`stuck`, not a hard failure, so the loop replans instead of aborting the whole task over
-a model that got confused.
+`findHallucinatedRefs` (`navigator/hallucinated-refs.ts`) then checks every derived
+action's `ref` (where one applies) against `perception.elements`. A schema-valid action
+referencing a ref the page never actually had is a hallucination, not a formatting
+error — `generateStructured`'s own retry can't catch it. The Navigator gets its own
+bounded retry loop on top of both checks: an unresolvable tool call or a hallucination
+triggers one corrective re-prompt, and if it still can't self-correct, the decision
+resolves as `{ actions: [], toolCalls: [], stuck: true }` — `stuck`, not a hard failure,
+so the loop replans instead of aborting the whole task over a model that got confused.
+
+`createToolCallActService(actionRunner, registry)` (`loop/act-service.ts`) is the real
+`ActService` the loop invokes in `acting`: every tool call runs through `registry` (any
+source), with `source: "browser"` calls additionally routed through the existing
+`ActionRunner` one call at a time — its cross-call retry/stall/history behavior
+(`@aegis/actions`, #14) is preserved exactly, unchanged. `AgentLoopContext` keeps both
+`proposedActions` (feeding the unchanged policy/critic/confirmation/trace path) and
+`proposedToolCalls` (what `acting` actually executes) in lockstep — the Navigator sets
+both together, and an `EDIT` during confirmation re-derives `proposedToolCalls` from the
+edited actions via `actionToToolCall`.
 
 ## The Verifier
 

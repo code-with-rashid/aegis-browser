@@ -18,15 +18,22 @@ export type {
   CriticCheckInput,
   CriticCheckOutput,
   CriticService,
+  ToolCall,
+  ToolCallRunResult,
+  ToolRunOutcome,
   ActService,
+  ToolCallOutcomeSummary,
+  RunSummary,
   VerifyInput,
   VerifyOutput,
   VerifyOutcome,
   VerifierService,
 } from './loop/services';
+export { actionToToolCall } from './loop/services';
 
-export type { ActionOutcomeSummary, RunSummary } from './loop/run-summary';
 export { summarizeRunOutcome } from './loop/run-summary';
+
+export { createToolCallActService } from './loop/act-service';
 
 export type {
   AgentLoopInput,
@@ -77,6 +84,12 @@ export { NavigatorOutputSchema } from './navigator/schema';
 export type { BuildNavigatorPromptOptions } from './navigator/prompt';
 export { NAVIGATOR_SYSTEM_PROMPT, buildNavigatorPrompt } from './navigator/prompt';
 export { findHallucinatedRefs } from './navigator/hallucinated-refs';
+export type {
+  RawToolCall,
+  ResolvedToolCalls,
+  ToolCallResolutionIssue,
+} from './navigator/resolve-tool-calls';
+export { resolveToolCalls } from './navigator/resolve-tool-calls';
 export type { CreateNavigatorServiceOptions } from './navigator/create-navigator-service';
 export { createNavigatorService } from './navigator/create-navigator-service';
 

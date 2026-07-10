@@ -1,11 +1,12 @@
-import type { Action, ExecutorContext, RunOutcome } from '@aegis/actions';
+import type { Action, ExecutorContext } from '@aegis/actions';
 import type { CdpError, PerceptionPayload } from '@aegis/perception';
 import { isErr, type Result } from '@aegis/shared';
 import { assign, fromPromise, setup } from 'xstate';
 
 import { buildConfirmationRequest, type ConfirmationRequest } from './confirmation';
 import type { AgentError } from './errors';
-import { summarizeRunOutcome, type RunSummary } from './run-summary';
+import { summarizeRunOutcome } from './run-summary';
+import { actionToToolCall } from './services';
 import type {
   CriticCheckInput,
   CriticCheckOutput,
@@ -17,6 +18,9 @@ import type {
   PlanOutput,
   PolicyCheckInput,
   PolicyCheckOutput,
+  RunSummary,
+  ToolCall,
+  ToolRunOutcome,
   VerifyInput,
   VerifyOutcome,
   VerifyOutput,
@@ -63,6 +67,8 @@ export interface AgentLoopContext {
   readonly subGoalHistory: readonly string[];
   readonly perception: PerceptionPayload | undefined;
   readonly proposedActions: readonly Action[];
+  /** The authoritative decision `acting` executes — kept in lockstep with `proposedActions` (derived by the Navigator, or re-derived via `actionToToolCall` after an `EDIT`). */
+  readonly proposedToolCalls: readonly ToolCall[];
   readonly lastRunSummary: RunSummary | undefined;
   readonly lastError: LoopErrorSummary | undefined;
   readonly taskSummary: string | undefined;
@@ -121,8 +127,8 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       criticActor: fromPromise<Result<CriticCheckOutput, AgentError>, CriticCheckInput>(
         ({ input, signal }) => services.checkAlignment(input, signal),
       ),
-      actActor: fromPromise<RunOutcome, { actions: readonly Action[] }>(({ input, signal }) =>
-        services.act(input.actions, executorContext, signal),
+      actActor: fromPromise<ToolRunOutcome, { toolCalls: readonly ToolCall[] }>(
+        ({ input, signal }) => services.act(input.toolCalls, executorContext, signal),
       ),
       verifyActor: fromPromise<Result<VerifyOutput, AgentError>, VerifyInput>(({ input, signal }) =>
         services.verify(input, signal),
@@ -141,6 +147,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       subGoalHistory: [],
       perception: undefined,
       proposedActions: [],
+      proposedToolCalls: [],
       lastRunSummary: undefined,
       lastError: undefined,
       taskSummary: undefined,
@@ -266,6 +273,11 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
               actions: assign({
                 proposedActions: ({ event }) =>
                   !isErr(event.output) ? event.output.value.actions : [],
+                proposedToolCalls: ({ event }) =>
+                  !isErr(event.output)
+                    ? (event.output.value.toolCalls ??
+                      event.output.value.actions.map(actionToToolCall))
+                    : [],
                 navigatorReasoning: ({ event }) =>
                   !isErr(event.output) ? event.output.value.reasoning : undefined,
               }),
@@ -411,6 +423,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
             target: 'confirming',
             actions: assign({
               proposedActions: ({ event }) => event.actions,
+              proposedToolCalls: ({ event }) => event.actions.map(actionToToolCall),
               pendingConfirmation: ({ context, event }) =>
                 buildConfirmationRequest(
                   event.actions,
@@ -446,7 +459,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
       acting: {
         invoke: {
           src: 'actActor',
-          input: ({ context }) => ({ actions: context.proposedActions }),
+          input: ({ context }) => ({ toolCalls: context.proposedToolCalls }),
           onDone: [
             {
               guard: ({ event }) => event.output.kind === 'completed',
@@ -471,7 +484,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
                   code: 'ACTION_RUN_FAILED',
                   message:
                     event.output.kind === 'failed'
-                      ? `Action "${event.output.failedAction.type}" failed after retries`
+                      ? `Tool "${event.output.failedToolCall.toolId}" failed after retries`
                       : 'Action run failed',
                 }),
               }),

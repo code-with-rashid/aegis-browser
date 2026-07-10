@@ -328,7 +328,11 @@ describe('agent loop machine', () => {
         actCalls += 1;
         return Promise.resolve(
           actCalls === 1
-            ? { kind: 'stalled', results: [], stalledOn: { type: 'wait', ms: 1 } }
+            ? {
+                kind: 'stalled',
+                results: [],
+                stalledOn: { toolId: 'browser.wait', args: { type: 'wait', ms: 1 } },
+              }
             : { kind: 'completed', results: [] },
         );
       },
@@ -349,7 +353,10 @@ describe('agent loop machine', () => {
         Promise.resolve({
           kind: 'failed',
           results: [],
-          failedAction: { type: 'navigate', url: 'https://example.com' },
+          failedToolCall: {
+            toolId: 'browser.navigate',
+            args: { type: 'navigate', url: 'https://example.com' },
+          },
         }),
     });
     const machine = createAgentLoopMachine(services, testExecutorContext());

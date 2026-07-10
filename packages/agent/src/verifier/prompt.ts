@@ -15,7 +15,7 @@ export const VERIFIER_SYSTEM_PROMPT = [
 ].join('\n');
 
 function formatRunSummary(input: VerifyInput): string {
-  return input.runSummary.actions.map((action) => `- ${action.type}: succeeded`).join('\n');
+  return input.runSummary.toolCalls.map((toolCall) => `- ${toolCall.toolId}: succeeded`).join('\n');
 }
 
 export interface BuildVerifierPromptOptions {
