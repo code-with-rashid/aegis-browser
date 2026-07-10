@@ -87,7 +87,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M11 — UX & governance
 
-- [ ] #89 P2-10 Tools & MCP management UI — blocked by: #86, #87
+- [x] #89 P2-10 Tools & MCP management UI — blocked by: #86, #87
 - [ ] #90 P2-11 Trace + confirmation for tool calls — blocked by: #82
 
 ### M12 — Integration & release
@@ -341,6 +341,20 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   real content scripts and real background relay. The example tool is deliberately
   read-only, since the confirmation UI still can't preview a non-browser tool call
   (`buildConfirmationRequest` stays `Action[]`-only) - that gap is explicitly #90's job.
+- [0037](docs/adr/0037-mcp-tools-management-ui.md) — Tools & MCP management UI (Phase 2,
+  issue #89): closes the MCP-server composition-root gap #85/#86 deferred -
+  `registerConfiguredMcpServers` in `build-loop-services.ts` connects every configured,
+  enabled server and registers its allowed tools, tolerating any single server's failure.
+  A new options tab (`mcp-tools-panel.tsx`) manages servers, discovers tools via the
+  existing `testMcpServerConnection`, sets per-tool allow/deny, and toggles WebMCP
+  globally (`createWebMcpSettingsStore`, defaults on). `buildMcpToolId`/`toIdSegment` are
+  now exported from `@aegis/mcp` so the UI computes the exact same tool id a live run
+  does. Investigating this surfaced a real, pre-existing gap: the background has no way
+  to share an _unlocked_ vault with the options page's separate process, so an MCP server
+  needing an auth header can't actually connect from a live task yet (a server needing no
+  auth is unaffected) - documented, not silently worked around; the same gap already
+  existed for `input_text`/`send_keys` secret placeholders, which also have no live-run
+  caller today.
 
 ## Notes
 
@@ -379,3 +393,5 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   `apps/extension` gains its first `@aegis/mcp` dependency and its first content scripts.
 - #88 (WebMCP preferred-action routing) merged 2026-07-10 — see ADR 0036. Final issue in
   M10 — a WebMCP tool is now live end-to-end, from page declaration to Navigator call.
+- #89 (Tools & MCP management UI) merged 2026-07-10 — see ADR 0037. First issue in M11;
+  a configured MCP server is now also live end-to-end, from the options page to a run.

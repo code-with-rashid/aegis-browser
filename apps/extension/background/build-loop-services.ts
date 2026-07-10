@@ -14,14 +14,27 @@ import {
   type LoopServices,
 } from '@aegis/agent';
 import { createModelRouter, loadModelRoutingConfig, ProviderRegistry } from '@aegis/llm';
-import { registerWebMcpTools, type WebMcpSource } from '@aegis/mcp';
+import {
+  createMcpServerStore,
+  createMcpToolPolicyStore,
+  createWebMcpSettingsStore,
+  registerMcpServerTools,
+  registerWebMcpTools,
+  type RegisteredMcpServerTools,
+  type WebMcpSource,
+} from '@aegis/mcp';
 import {
   createChromeCdpSession,
   getPerceptionPayload,
   type CdpError,
   type CdpSession,
 } from '@aegis/perception';
-import { createPolicyEngine, createPolicyStore, sanitizePageContent } from '@aegis/security';
+import {
+  createPolicyEngine,
+  createPolicyStore,
+  createSecretVault,
+  sanitizePageContent,
+} from '@aegis/security';
 import { err, isErr, isOk, ok, type Result, type StoragePort } from '@aegis/shared';
 
 import { createPolicyService } from './policy-service';
@@ -65,6 +78,48 @@ async function resolveOrigin(tabId: number): Promise<string> {
 }
 
 /**
+ * Connects to every enabled, configured MCP server (`@aegis/mcp`'s `McpServerStore`, #84)
+ * and registers its allowed tools (#86's deny-by-default gate) into `registry` — the
+ * composition-root wiring deferred since #85/#86, closed here alongside the options UI
+ * that actually manages these servers (#89). A single server's failure (unreachable, bad
+ * auth, vault locked) never blocks another server or task start, matching the same
+ * "never hard-depend on any one tool source" principle already applied to WebMCP
+ * (`docs/adr/0035-webmcp-detection-and-adapter.md`).
+ *
+ * Uses a fresh `SecretVault` instance scoped to this call — the background service
+ * worker has no way to share an *unlocked* vault with the options page's own instance
+ * (separate processes); see `docs/adr/0037-mcp-tools-management-ui.md`. A server with no
+ * `authHeaders` at all never touches the vault and registers normally regardless.
+ */
+async function registerConfiguredMcpServers(
+  registry: ToolRegistry,
+  storage: StoragePort,
+): Promise<readonly RegisteredMcpServerTools[]> {
+  const serverStore = createMcpServerStore(storage);
+  const policyStore = createMcpToolPolicyStore(storage);
+  const vault = createSecretVault(storage);
+
+  const serversResult = await serverStore.listServers();
+  if (isErr(serversResult)) {
+    return [];
+  }
+
+  const registrations: RegisteredMcpServerTools[] = [];
+  for (const config of serversResult.value) {
+    const result = await registerMcpServerTools(
+      registry,
+      config,
+      (name) => vault.getSecret(name),
+      policyStore,
+    );
+    if (isOk(result)) {
+      registrations.push(result.value);
+    }
+  }
+  return registrations;
+}
+
+/**
  * Assembles a real, non-mock {@link LoopServices} + {@link ExecutorContext} for `tabId` —
  * the composition root the security ADRs (0010, 0011, 0012) deferred. Every port is a
  * real adapter (`@aegis/perception`'s live CDP session, `@aegis/actions`' action runner,
@@ -102,8 +157,17 @@ export async function buildLoopServices(
   const toolRegistry = createDefaultToolRegistry();
   // WebMCP is opportunistic (docs/adr/0035-webmcp-detection-and-adapter.md) — a failed
   // registration (e.g. no bridge ever connected for this tab) must never fail task
-  // start; it just means no `source: "webmcp"` tools are available this run.
-  const webMcpRegistration = await registerWebMcpTools(toolRegistry, webMcpSource);
+  // start; it just means no `source: "webmcp"` tools are available this run. The global
+  // toggle (#89) is checked first: disabled means WebMCP tools are never registered at
+  // all, regardless of what any page declares. A settings-read failure fails open
+  // (enabled) — this toggle is a preference, not a security boundary; every tool call
+  // still goes through the same risk-based policy/critic/confirmation gate either way.
+  const webMcpSettingsResult = await createWebMcpSettingsStore(storage).getSettings();
+  const webMcpEnabled = isOk(webMcpSettingsResult) ? webMcpSettingsResult.value.enabled : true;
+  const webMcpRegistration = webMcpEnabled
+    ? await registerWebMcpTools(toolRegistry, webMcpSource)
+    : undefined;
+  const mcpRegistrations = await registerConfiguredMcpServers(toolRegistry, storage);
   const policyEngine = createPolicyEngine(createPolicyStore(storage));
   const checkPolicy = createPolicyService(policyEngine, () => resolveOrigin(tabId), toolRegistry);
 
@@ -124,9 +188,12 @@ export async function buildLoopServices(
     executorContext,
     toolRegistry,
     attach: () => session.attach(),
-    detach: () => {
-      if (isOk(webMcpRegistration)) {
+    detach: async () => {
+      if (webMcpRegistration !== undefined && isOk(webMcpRegistration)) {
         webMcpRegistration.value.unregister();
+      }
+      for (const registration of mcpRegistrations) {
+        await registration.disconnect();
       }
       return session.detach();
     },
