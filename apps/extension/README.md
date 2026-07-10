@@ -132,6 +132,34 @@ again.
 - No "reveal" for an existing secret's value; re-adding an existing name overwrites it
   (the vault's `setSecret` is already an upsert).
 
+## Options — Tools & MCP panel (#89)
+
+See [ADR 0037](../../docs/adr/0037-mcp-tools-management-ui.md). A fourth options tab,
+"Tools & MCP" (`mcp-tools-panel.tsx`), takes injected `@aegis/mcp` `McpServerStore`/
+`McpToolPolicyStore`/`WebMcpSettingsStore` plus a `SecretResolver` (the options page's own
+`SecretVault`, `(name) => secretVault.getSecret(name)`).
+
+- Add/enable/disable/remove an MCP server (`mcp-server-draft.ts`'s `toMcpServerConfig`
+  validates the form, same shape as `site-policy-draft.ts`) — the enabled checkbox
+  auto-saves on change, same convention as the Permissions panel.
+- "Discover tools" calls `testMcpServerConnection` (already built for #84's connection
+  test) and renders each returned tool's name, description, JSON input schema, and
+  inferred risk. Its per-tool permission `<select>` (`buildMcpToolId` computes the exact
+  id `registerMcpServerTools` uses internally) reads/writes the same `McpToolPolicyStore`
+  record a live run consults — a tool with no stored policy shows "Pending review,"
+  matching #86's deny-by-default gate.
+- A single checkbox toggles WebMCP globally (`WebMcpSettingsStore`, defaults on) —
+  `buildLoopServices` checks it before ever registering a page's declared tools.
+- Because every store here re-reads its backing storage on every call (no cache, same as
+  `PolicyStore`), changes take effect on the very next task start — no reload needed.
+
+`background/build-loop-services.ts` closes the composition-root gap #85/#86 deferred:
+`registerConfiguredMcpServers` connects every configured, enabled server and registers
+its allowed tools, tolerating any single server's failure without blocking another or
+task start. A server needing an auth header can't actually connect from a live task yet
+— the background has no way to share an _unlocked_ vault with the options page's separate
+process — a real, documented limitation, not silently worked around (ADR 0037).
+
 ## E2E: read-only use cases (#31)
 
 See [ADR 0019](../../docs/adr/0019-e2e-read-only-use-cases.md). `e2e/` runs the real

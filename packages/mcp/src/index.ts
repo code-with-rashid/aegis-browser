@@ -37,6 +37,8 @@ export { testMcpServerConnection } from './config/test-connection';
 
 export { jsonSchemaToZod } from './registry/json-schema-to-zod';
 
+export { toIdSegment, buildMcpToolId } from './registry/tool-id';
+
 export type {
   McpToolRegistrationError,
   RegisteredMcpServerTools,
@@ -82,3 +84,6 @@ export type {
   WebMcpEventBridgeSource,
 } from './webmcp/isolated-bridge';
 export { createWebMcpEventBridgeSource } from './webmcp/isolated-bridge';
+
+export type { WebMcpSettings, WebMcpSettingsStore } from './webmcp/webmcp-settings';
+export { createWebMcpSettingsStore } from './webmcp/webmcp-settings';

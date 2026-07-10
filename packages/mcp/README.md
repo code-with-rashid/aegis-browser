@@ -209,9 +209,18 @@ extension, not same-page script) finds a page's declared tools. This package's
   **`webmcp-relay.content.ts`** (default ISOLATED world) are the real content scripts that
   install each half in a running browser. The ISOLATED-world script tears itself down via
   WXT's `ctx.onInvalidated`, which fires on navigation and tab close alike.
-- **No live wiring into a running task's `ToolRegistry` yet** — the content script detects
-  tools but doesn't relay them to the background, and `buildLoopServices` doesn't consult
-  them. That's #88's job (WebMCP preferred-action routing), the first issue that actually
-  needs a live WebMCP tool to route to. See `docs/adr/0035-webmcp-detection-and-adapter.md`.
+- **Live end to end since #88**: `apps/extension/background/webmcp-tab-bridge.ts` relays
+  the content script's detected tools to the background over a per-tab `chrome.runtime`
+  port, and `buildLoopServices` calls `registerWebMcpTools` against that live source —
+  see `docs/adr/0036-webmcp-preferred-action-routing.md`.
+- **`createWebMcpSettingsStore(storage)`** (`webmcp/webmcp-settings.ts`, #89) is a global
+  on/off toggle, defaulting to enabled: `buildLoopServices` checks it before registering
+  any WebMCP tool at all — off means no page's declared tools are ever registered,
+  regardless of what a given page offers. See `docs/adr/0037-mcp-tools-management-ui.md`.
+
+`toIdSegment`/`buildMcpToolId` (`registry/tool-id.ts`) are exported from the package root
+so a consumer building tool ids outside `registerMcpServerTools` itself — the options-page
+management UI (#89), computing a tool's id to read/write its `McpToolPolicyStore` record —
+always agrees with the exact scheme `registerMcpServerTools` uses internally.
 
 Depends on `@aegis/shared`, `@aegis/actions`, `@modelcontextprotocol/sdk`, `zod`.
