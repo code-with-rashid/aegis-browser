@@ -45,3 +45,12 @@ export type {
   RegisteredMcpServerTools,
 } from './registry/mcp-tool-registry';
 export { inferMcpToolRisk, registerMcpServerTools } from './registry/mcp-tool-registry';
+
+export type { McpToolPolicyMode, McpToolPolicy, McpToolPolicyMap } from './policy/mcp-tool-policy';
+export { McpToolPolicyModeSchema, McpToolPolicySchema } from './policy/mcp-tool-policy';
+
+export type { McpToolPolicyStore } from './policy/mcp-tool-policy-store';
+export { createMcpToolPolicyStore } from './policy/mcp-tool-policy-store';
+
+export type { McpToolGateResult } from './policy/gate-mcp-tools';
+export { gateMcpTools } from './policy/gate-mcp-tools';

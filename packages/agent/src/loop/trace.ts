@@ -1,10 +1,27 @@
-import { describeAction } from './confirmation';
-import type { AgentLoopContext } from './machine';
-import type { VerifyOutcome } from './services';
+import type { ToolRegistry, ToolSource } from '@aegis/actions';
 
-/** One executed action within a {@link TraceStep} — a human-readable description (reusing {@link describeAction}), not the raw `Action`. */
+import { identitySanitize, type SanitizeText } from '../sanitize';
+import { describeToolCall } from './confirmation';
+import type { AgentLoopContext } from './machine';
+import type { PolicyDecision, VerifyOutcome } from './services';
+
+const MAX_ARGS_SUMMARY_LENGTH = 200;
+
+/** A short, human-scannable rendering of a tool call's args, for audit — not a description, just enough to see what was passed. */
+function summarizeArgs(args: unknown): string {
+  const json = JSON.stringify(args);
+  return json.length > MAX_ARGS_SUMMARY_LENGTH
+    ? `${json.slice(0, MAX_ARGS_SUMMARY_LENGTH)}…`
+    : json;
+}
+
+/** One executed tool call within a {@link TraceStep} — a human-readable description (via {@link describeToolCall}) plus enough structured detail (id, source, args) to audit it, whatever its source. */
 export interface TraceActionEntry {
+  readonly toolId: string;
+  /** `undefined` only if the tool was somehow unregistered by the time the trace was built. */
+  readonly source: ToolSource | undefined;
   readonly description: string;
+  readonly argsSummary: string | undefined;
   readonly succeeded: boolean;
   readonly errorMessage: string | undefined;
 }
@@ -12,7 +29,8 @@ export interface TraceActionEntry {
 /**
  * One full plan → perceive → decide → act → verify cycle, as the trace UI (#26) renders
  * it: the sub-goal being pursued, the reasoning behind the plan/action/verdict, what ran
- * and its result, and the perception it was all based on (shown collapsed/expandable).
+ * and its result, the security policy's decision for this step's tool calls (#86), and
+ * the perception it was all based on (shown collapsed/expandable).
  */
 export interface TraceStep {
   readonly stepNumber: number;
@@ -20,6 +38,7 @@ export interface TraceStep {
   readonly plannerReasoning: string | undefined;
   readonly navigatorReasoning: string | undefined;
   readonly actions: readonly TraceActionEntry[];
+  readonly policyDecision: PolicyDecision | undefined;
   readonly verifyOutcome: VerifyOutcome | undefined;
   readonly verifierReasoning: string | undefined;
   readonly perception: AgentLoopContext['perception'];
@@ -30,20 +49,32 @@ export interface TraceStep {
  * resolves (`context.lastRunSummary` is only ever set by a just-completed `acting` run).
  * Returns `undefined` when there's nothing to report yet — e.g. the very first
  * `planning` pass, before any action has run.
+ *
+ * Correlates each outcome in `context.lastRunSummary.toolCalls` with
+ * `context.proposedToolCalls` by index — never `context.proposedActions`, which only ever
+ * holds the browser-`Action` subset (#85/#86) and would silently misalign against a batch
+ * that mixes browser and MCP/WebMCP tool calls.
  */
 export function buildTraceStep(
   context: AgentLoopContext,
   stepNumber: number,
+  toolRegistry: ToolRegistry,
+  sanitize: SanitizeText = identitySanitize,
 ): TraceStep | undefined {
   if (context.lastRunSummary === undefined) {
     return undefined;
   }
 
   const actions: TraceActionEntry[] = context.lastRunSummary.toolCalls.map((outcome, index) => {
-    const action = context.proposedActions[index];
+    const toolCall = context.proposedToolCalls[index];
     return {
+      toolId: outcome.toolId,
+      source: toolRegistry.get(outcome.toolId)?.source,
       description:
-        action !== undefined ? describeAction(action, context.perception) : outcome.toolId,
+        toolCall !== undefined
+          ? describeToolCall(toolCall, toolRegistry, context.perception, sanitize)
+          : outcome.toolId,
+      argsSummary: toolCall !== undefined ? summarizeArgs(toolCall.args) : undefined,
       succeeded: outcome.succeeded,
       errorMessage: outcome.errorMessage,
     };
@@ -55,6 +86,7 @@ export function buildTraceStep(
     plannerReasoning: context.plannerReasoning,
     navigatorReasoning: context.navigatorReasoning,
     actions,
+    policyDecision: context.policyDecision,
     verifyOutcome: context.verifyOutcome,
     verifierReasoning: context.verifierReasoning,
     perception: context.perception,

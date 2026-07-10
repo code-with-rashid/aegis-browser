@@ -111,16 +111,17 @@ server will work once enabled.
 
 ## Registering MCP tools into the `ToolRegistry` (`registry/`)
 
-`registerMcpServerTools(registry, config, resolveSecret, options?)`
+`registerMcpServerTools(registry, config, resolveSecret, policyStore, options?)`
 (`registry/mcp-tool-registry.ts`) connects to an enabled `McpServerConnectionConfig`,
-lists its tools, and registers each as a `source: "mcp"` `Tool` (`@aegis/actions`) the
-Navigator can call (#81) and the policy engine can gate (#82) exactly like a built-in
-browser tool:
+lists its tools, gates them through `policyStore` (below), and registers each _allowed_
+tool as a `source: "mcp"` `Tool` (`@aegis/actions`) the Navigator can call (#81) and the
+policy engine can gate per-call (#82) exactly like a built-in browser tool:
 
 ```ts
-const result = await registerMcpServerTools(toolRegistry, serverConfig, resolveSecret);
+const result = await registerMcpServerTools(toolRegistry, serverConfig, resolveSecret, policyStore);
 if (isOk(result)) {
-  // result.value.toolIds -> e.g. ["mcp.weather_co.get_forecast"]
+  // result.value.toolIds -> e.g. ["mcp.weather_co.get_forecast"] (only the allowed ones)
+  // result.value.newlyDiscoveredToolIds -> tool ids seen for the first time, recorded pending
   // result.value.disconnect() -> call when the server is disabled/removed, or on teardown
 }
 ```
@@ -149,5 +150,28 @@ MCP servers can ask the connecting client for input mid-call ("elicitation"). Su
 `elicitation` capability and answers requests through it; omitting it means the client
 never advertises the capability, so a well-behaved server simply won't ask. Nothing wires
 a real handler through the confirmation UI yet — that's #90.
+
+## Tool permissioning (`policy/`)
+
+Every MCP tool is denied by default, whether at the server level or the individual-tool
+level — no MCP tool is ever auto-trusted (#86):
+
+- **Per-server**: `config.enabled === false` means `registerMcpServerTools` never even
+  connects — it resolves immediately to an empty, no-op registration.
+- **Per-tool**: `McpToolPolicy` (`policy/mcp-tool-policy.ts`) is `{toolId, mode: "allow" |
+"deny"}`, persisted by `createMcpToolPolicyStore(storage)` (`policy/mcp-tool-policy-store.ts`)
+  — the same one-storage-record-per-map shape `@aegis/security`'s `PolicyStore` and this
+  package's own `McpServerStore` already use. There's no `ask`/`confirm` mode here: this
+  gates whether a tool may be registered/callable _at all_, a separate, one-time decision
+  from the per-call risk gate `@aegis/security`'s `PolicyEngine` already runs (#82).
+- **`gateMcpTools(serverIdSegment, descriptors, policyStore)`** (`policy/gate-mcp-tools.ts`)
+  is the actual deny-by-default gate `registerMcpServerTools` calls after `listTools()`:
+  a tool id with no stored policy is recorded `mode: "deny"` on the spot and reported in
+  `newlyDiscoveredToolIds` (so a management UI, #89, can prompt for a decision); an
+  explicitly `deny`d tool stays excluded; only an explicitly `allow`ed tool is registered.
+  A denied (or merely undecided) tool is never registered, so it's neither offered to the
+  Navigator nor callable (`ToolRegistry.call` returns `TOOL_UNKNOWN`).
+
+See `docs/adr/0034-mcp-tool-permissioning.md`.
 
 Depends on `@aegis/shared`, `@aegis/actions`, `@modelcontextprotocol/sdk`, `zod`.

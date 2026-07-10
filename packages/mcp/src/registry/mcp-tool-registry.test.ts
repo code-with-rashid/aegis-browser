@@ -1,9 +1,10 @@
 import { ToolRegistry } from '@aegis/actions';
-import { err, isErr, isOk } from '@aegis/shared';
+import { createMemoryStorage, err, isErr, isOk } from '@aegis/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { startMockMcpServer, textResult, type MockMcpServer } from '../testing/mock-mcp-server';
+import { createMcpToolPolicyStore, type McpToolPolicyStore } from '../policy/mcp-tool-policy-store';
 import { inferMcpToolRisk, registerMcpServerTools } from './mcp-tool-registry';
 import type { McpServerConnectionConfig } from '../config/mcp-server-config';
 import type { SecretResolver } from '../config/resolve-headers';
@@ -19,6 +20,15 @@ afterEach(async () => {
 
 const noSecrets: SecretResolver = () =>
   Promise.resolve(err({ message: 'no secrets configured in this test' }));
+
+/** A fresh policy store with `toolIds` pre-approved — simulates a tool a human already opted into, for tests exercising something other than the gate itself. */
+async function preApprovedStore(toolIds: readonly string[]): Promise<McpToolPolicyStore> {
+  const store = createMcpToolPolicyStore(createMemoryStorage());
+  for (const toolId of toolIds) {
+    await store.setPolicy({ toolId, mode: 'allow' });
+  }
+  return store;
+}
 
 describe('inferMcpToolRisk', () => {
   it('classifies a read-only tool as read', () => {
@@ -40,7 +50,7 @@ describe('inferMcpToolRisk', () => {
 });
 
 describe('registerMcpServerTools', () => {
-  it('registers each MCP tool namespaced mcp.<server>.<tool>', async () => {
+  it('registers each already-approved MCP tool namespaced mcp.<server>.<tool>', async () => {
     server = await startMockMcpServer([
       { name: 'get_weather', handler: () => textResult('sunny') },
       { name: 'get_forecast', handler: () => textResult('rain tomorrow') },
@@ -52,8 +62,12 @@ describe('registerMcpServerTools', () => {
       authHeaders: [],
       enabled: true,
     };
+    const policyStore = await preApprovedStore([
+      'mcp.weather_co.get_weather',
+      'mcp.weather_co.get_forecast',
+    ]);
 
-    const result = await registerMcpServerTools(registry, config, noSecrets);
+    const result = await registerMcpServerTools(registry, config, noSecrets, policyStore);
 
     expect(isOk(result)).toBe(true);
     if (isOk(result)) {
@@ -61,10 +75,114 @@ describe('registerMcpServerTools', () => {
         'mcp.weather_co.get_forecast',
         'mcp.weather_co.get_weather',
       ]);
+      expect(result.value.newlyDiscoveredToolIds).toEqual([]);
       await result.value.disconnect();
     }
     expect(registry.has('mcp.weather_co.get_weather')).toBe(true);
     expect(registry.get('mcp.weather_co.get_weather')?.source).toBe('mcp');
+  });
+
+  it('does not register a tool seen for the first time, recording it deny (pending) and reporting it as newly discovered (#86)', async () => {
+    server = await startMockMcpServer([
+      { name: 'get_weather', handler: () => textResult('sunny') },
+    ]);
+    const registry = new ToolRegistry();
+    const config: McpServerConnectionConfig = {
+      url: server.url,
+      name: 'test',
+      authHeaders: [],
+      enabled: true,
+    };
+    const policyStore = createMcpToolPolicyStore(createMemoryStorage());
+
+    const result = await registerMcpServerTools(registry, config, noSecrets, policyStore);
+
+    expect(isOk(result) && result.value.toolIds).toEqual([]);
+    expect(isOk(result) && result.value.newlyDiscoveredToolIds).toEqual(['mcp.test.get_weather']);
+    expect(registry.has('mcp.test.get_weather')).toBe(false);
+    const stored = await policyStore.getPolicy('mcp.test.get_weather');
+    expect(isOk(stored) && stored.value).toEqual({ toolId: 'mcp.test.get_weather', mode: 'deny' });
+    if (isOk(result)) {
+      await result.value.disconnect();
+    }
+  });
+
+  it('does not register an explicitly denied tool, and it is not callable through the registry (#86)', async () => {
+    server = await startMockMcpServer([
+      { name: 'delete_account', handler: () => textResult('deleted') },
+    ]);
+    const registry = new ToolRegistry();
+    const config: McpServerConnectionConfig = {
+      url: server.url,
+      name: 'test',
+      authHeaders: [],
+      enabled: true,
+    };
+    const policyStore = createMcpToolPolicyStore(createMemoryStorage());
+    await policyStore.setPolicy({ toolId: 'mcp.test.delete_account', mode: 'deny' });
+
+    const result = await registerMcpServerTools(registry, config, noSecrets, policyStore);
+
+    expect(isOk(result) && result.value.toolIds).toEqual([]);
+    expect(isOk(result) && result.value.newlyDiscoveredToolIds).toEqual([]);
+    expect(registry.has('mcp.test.delete_account')).toBe(false);
+    const callResult = await registry.call(
+      'mcp.test.delete_account',
+      {},
+      { session: undefined as never, tabManager: undefined as never },
+    );
+    expect(isErr(callResult) && callResult.error.code).toBe('TOOL_UNKNOWN');
+    if (isOk(result)) {
+      await result.value.disconnect();
+    }
+  });
+
+  it('gates a mixed batch independently: registers only the explicitly allowed tool', async () => {
+    server = await startMockMcpServer([
+      { name: 'get_weather', handler: () => textResult('sunny') },
+      { name: 'delete_account', handler: () => textResult('deleted') },
+      { name: 'brand_new_tool', handler: () => textResult('ok') },
+    ]);
+    const registry = new ToolRegistry();
+    const config: McpServerConnectionConfig = {
+      url: server.url,
+      name: 'test',
+      authHeaders: [],
+      enabled: true,
+    };
+    const policyStore = createMcpToolPolicyStore(createMemoryStorage());
+    await policyStore.setPolicy({ toolId: 'mcp.test.get_weather', mode: 'allow' });
+    await policyStore.setPolicy({ toolId: 'mcp.test.delete_account', mode: 'deny' });
+
+    const result = await registerMcpServerTools(registry, config, noSecrets, policyStore);
+
+    expect(isOk(result) && result.value.toolIds).toEqual(['mcp.test.get_weather']);
+    expect(isOk(result) && result.value.newlyDiscoveredToolIds).toEqual([
+      'mcp.test.brand_new_tool',
+    ]);
+    if (isOk(result)) {
+      await result.value.disconnect();
+    }
+  });
+
+  it('never connects when the server config is disabled (per-server allow/deny, #86)', async () => {
+    server = await startMockMcpServer([{ name: 'noop', handler: () => textResult('ok') }]);
+    const registry = new ToolRegistry();
+    const config: McpServerConnectionConfig = {
+      url: server.url,
+      name: 'test',
+      authHeaders: [],
+      enabled: false,
+    };
+    const policyStore = createMcpToolPolicyStore(createMemoryStorage());
+
+    const result = await registerMcpServerTools(registry, config, noSecrets, policyStore);
+
+    expect(isOk(result) && result.value.toolIds).toEqual([]);
+    expect(isOk(result) && result.value.newlyDiscoveredToolIds).toEqual([]);
+    // Proves no connection was ever attempted, not just that no tools were registered.
+    expect(server.requestHeaders).toHaveLength(0);
+    expect(registry.list()).toHaveLength(0);
   });
 
   it('assigns risk from MCP annotations, failing safe when none are declared', async () => {
@@ -84,8 +202,13 @@ describe('registerMcpServerTools', () => {
       authHeaders: [],
       enabled: true,
     };
+    const policyStore = await preApprovedStore([
+      'mcp.test.read_tool',
+      'mcp.test.destructive_tool',
+      'mcp.test.unannotated_tool',
+    ]);
 
-    const result = await registerMcpServerTools(registry, config, noSecrets);
+    const result = await registerMcpServerTools(registry, config, noSecrets, policyStore);
     expect(isOk(result)).toBe(true);
 
     expect(registry.get('mcp.test.read_tool')?.risk).toBe('read');
@@ -111,7 +234,8 @@ describe('registerMcpServerTools', () => {
       authHeaders: [],
       enabled: true,
     };
-    const registerResult = await registerMcpServerTools(registry, config, noSecrets);
+    const policyStore = await preApprovedStore(['mcp.test.get_weather']);
+    const registerResult = await registerMcpServerTools(registry, config, noSecrets, policyStore);
     expect(isOk(registerResult)).toBe(true);
 
     const callResult = await registry.call(
@@ -137,7 +261,8 @@ describe('registerMcpServerTools', () => {
       authHeaders: [],
       enabled: true,
     };
-    const registerResult = await registerMcpServerTools(registry, config, noSecrets);
+    const policyStore = await preApprovedStore(['mcp.test.get_weather']);
+    const registerResult = await registerMcpServerTools(registry, config, noSecrets, policyStore);
     expect(isOk(registerResult)).toBe(true);
 
     const callResult = await registry.call(
@@ -163,7 +288,8 @@ describe('registerMcpServerTools', () => {
       authHeaders: [],
       enabled: true,
     };
-    const registerResult = await registerMcpServerTools(registry, config, noSecrets);
+    const policyStore = await preApprovedStore(['mcp.test.broken']);
+    const registerResult = await registerMcpServerTools(registry, config, noSecrets, policyStore);
     expect(isOk(registerResult)).toBe(true);
 
     const callResult = await registry.call(
@@ -188,8 +314,9 @@ describe('registerMcpServerTools', () => {
       authHeaders: [{ name: 'Authorization', secretName: 'missing' }],
       enabled: true,
     };
+    const policyStore = createMcpToolPolicyStore(createMemoryStorage());
 
-    const result = await registerMcpServerTools(registry, config, noSecrets);
+    const result = await registerMcpServerTools(registry, config, noSecrets, policyStore);
 
     expect(isErr(result)).toBe(true);
     expect(registry.list()).toHaveLength(0);
@@ -202,8 +329,9 @@ describe('registerMcpServerTools', () => {
     server = undefined;
     const registry = new ToolRegistry();
     const config: McpServerConnectionConfig = { url, name: 'test', authHeaders: [], enabled: true };
+    const policyStore = createMcpToolPolicyStore(createMemoryStorage());
 
-    const result = await registerMcpServerTools(registry, config, noSecrets);
+    const result = await registerMcpServerTools(registry, config, noSecrets, policyStore);
 
     expect(isErr(result) && 'code' in result.error && result.error.code).toBe(
       'MCP_CONNECTION_FAILED',
@@ -234,9 +362,10 @@ describe('registerMcpServerTools', () => {
       authHeaders: [],
       enabled: true,
     };
+    const policyStore = await preApprovedStore(['mcp.test.needs_confirmation']);
     let receivedMessage = '';
 
-    const registerResult = await registerMcpServerTools(registry, config, noSecrets, {
+    const registerResult = await registerMcpServerTools(registry, config, noSecrets, policyStore, {
       onElicitationRequest: (request) => {
         receivedMessage = request.message;
         return Promise.resolve({ action: 'accept', content: { confirmed: true } });

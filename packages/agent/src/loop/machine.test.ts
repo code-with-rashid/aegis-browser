@@ -54,6 +54,7 @@ describe('agent loop machine', () => {
 
     expect(snapshot.value).toBe('done');
     expect(snapshot.context.taskSummary).toBeUndefined();
+    expect(snapshot.context.policyDecision).toBe('allow');
   });
 
   it('captures planner/navigator/verifier reasoning and the verify outcome on context, for the trace UI (#26)', async () => {
@@ -137,6 +138,7 @@ describe('agent loop machine', () => {
       timeout: WAIT_TIMEOUT,
     });
     expect(confirmingSnapshot.value).toBe('confirming');
+    expect(confirmingSnapshot.context.policyDecision).toBe('confirm');
     expect(confirmingSnapshot.context.pendingConfirmation?.actions).toEqual([
       { type: 'click', ref: toElementRef('ax:1') },
     ]);
@@ -235,6 +237,7 @@ describe('agent loop machine', () => {
       code: 'POLICY_DENIED',
       message: 'chase.com is hard deny-listed',
     });
+    expect(snapshot.context.policyDecision).toBe('deny');
   });
 
   it('blocks a misaligned action through replanning without ever asking a human', async () => {
