@@ -7,6 +7,15 @@ import type { PolicyDecision, VerifyOutcome } from './services';
 
 const MAX_ARGS_SUMMARY_LENGTH = 200;
 
+/**
+ * A fixed, documented estimate — not a measurement — of how many DOM actions (click,
+ * type, wait, ...) a single successful declared-tool call (`mcp`/`webmcp`) likely
+ * replaced. There's no way to know the actual number without also running the DOM path,
+ * which defeats the point of preferring the tool (#88); this constant exists purely to
+ * make the savings visible in the trace, not to claim precision.
+ */
+const ESTIMATED_DOM_STEPS_PER_DECLARED_TOOL_CALL = 3;
+
 /** A short, human-scannable rendering of a tool call's args, for audit — not a description, just enough to see what was passed. */
 function summarizeArgs(args: unknown): string {
   const json = JSON.stringify(args);
@@ -24,6 +33,8 @@ export interface TraceActionEntry {
   readonly argsSummary: string | undefined;
   readonly succeeded: boolean;
   readonly errorMessage: string | undefined;
+  /** Set only for a successful `mcp`/`webmcp` call — `ESTIMATED_DOM_STEPS_PER_DECLARED_TOOL_CALL`, a fixed estimate of the DOM steps this call likely replaced (#88). `undefined` for a browser action or a failed call. */
+  readonly estimatedDomStepsSaved: number | undefined;
 }
 
 /**
@@ -67,9 +78,11 @@ export function buildTraceStep(
 
   const actions: TraceActionEntry[] = context.lastRunSummary.toolCalls.map((outcome, index) => {
     const toolCall = context.proposedToolCalls[index];
+    const source = toolRegistry.get(outcome.toolId)?.source;
+    const isDeclaredTool = source === 'mcp' || source === 'webmcp';
     return {
       toolId: outcome.toolId,
-      source: toolRegistry.get(outcome.toolId)?.source,
+      source,
       description:
         toolCall !== undefined
           ? describeToolCall(toolCall, toolRegistry, context.perception, sanitize)
@@ -77,6 +90,10 @@ export function buildTraceStep(
       argsSummary: toolCall !== undefined ? summarizeArgs(toolCall.args) : undefined,
       succeeded: outcome.succeeded,
       errorMessage: outcome.errorMessage,
+      estimatedDomStepsSaved:
+        isDeclaredTool && outcome.succeeded
+          ? ESTIMATED_DOM_STEPS_PER_DECLARED_TOOL_CALL
+          : undefined,
     };
   });
 

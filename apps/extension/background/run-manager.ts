@@ -16,6 +16,7 @@ import {
   type AgentLoopEvent,
   type TraceStep,
 } from '@aegis/agent';
+import type { WebMcpSource } from '@aegis/mcp';
 import { sanitizePageContent } from '@aegis/security';
 import type { StoragePort } from '@aegis/shared';
 import { createActor, type Snapshot } from 'xstate';
@@ -78,6 +79,18 @@ export function createRunManager(
   /** `chrome.storage.local` in production — durable config (model routing, site policies) that must survive a restart. */
   localStorage: StoragePort,
   buildLoop: typeof buildLoopServices = buildLoopServices,
+  /** Resolves a tab's live WebMCP tools (`webmcp-tab-bridge.ts` in production) — defaults to "no tools", the same fallback `buildLoopServices` itself uses. */
+  getWebMcpSource: (tabId: number) => WebMcpSource = () => ({
+    listTools: () => Promise.resolve({ ok: true, value: [] }),
+    callTool: (name) =>
+      Promise.resolve({
+        ok: false,
+        error: { message: `No WebMCP source configured (calling "${name}")` },
+      }),
+    onToolsChanged: () => () => {
+      // No source, so it can never change.
+    },
+  }),
 ): RunManager {
   const ports = new Set<BackgroundPort>();
   let activeActor: LoopActorHandle | undefined;
@@ -151,7 +164,7 @@ export function createRunManager(
       return;
     }
 
-    const builtResult = await buildLoop(localStorage, tabId);
+    const builtResult = await buildLoop(localStorage, tabId, getWebMcpSource(tabId));
     if (!builtResult.ok) {
       requester.send({ type: 'RUN_START_FAILED', reason: startFailedReason(builtResult.error) });
       return;
@@ -244,7 +257,7 @@ export function createRunManager(
       }
 
       const { tabId, task } = persisted.context;
-      const builtResult = await buildLoop(localStorage, tabId);
+      const builtResult = await buildLoop(localStorage, tabId, getWebMcpSource(tabId));
       if (!builtResult.ok) {
         await clearAgentLoopSnapshot(sessionStorage);
         return;

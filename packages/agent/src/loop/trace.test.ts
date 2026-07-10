@@ -208,6 +208,7 @@ describe('buildTraceStep', () => {
         argsSummary: JSON.stringify({ type: 'click', ref: toElementRef('ax:1') }),
         succeeded: true,
         errorMessage: undefined,
+        estimatedDomStepsSaved: undefined,
       },
       {
         toolId: 'mcp.weather.get_forecast',
@@ -216,6 +217,7 @@ describe('buildTraceStep', () => {
         argsSummary: JSON.stringify({ city: 'London' }),
         succeeded: true,
         errorMessage: undefined,
+        estimatedDomStepsSaved: 3,
       },
     ]);
   });
@@ -243,5 +245,37 @@ describe('buildTraceStep', () => {
         errorMessage: undefined,
       },
     ]);
+  });
+
+  it('credits estimated DOM steps saved for a successful webmcp call, not for a failed one (#88)', () => {
+    const registry = registryFixture();
+    registry.register({
+      id: 'web.add_to_cart',
+      source: 'webmcp',
+      description: 'Adds an item to the cart',
+      inputSchema: z.object({ sku: z.string() }),
+      risk: 'state_changing',
+      execute: () => Promise.resolve(ok('added')),
+    });
+
+    const step = buildTraceStep(
+      contextFixture({
+        proposedToolCalls: [
+          { toolId: 'web.add_to_cart', args: { sku: 'oat-milk' } },
+          { toolId: 'web.add_to_cart', args: { sku: 'eggs' } },
+        ],
+        lastRunSummary: {
+          kind: 'failed',
+          toolCalls: [
+            { toolId: 'web.add_to_cart', succeeded: true },
+            { toolId: 'web.add_to_cart', succeeded: false, errorMessage: 'out of stock' },
+          ],
+        },
+      }),
+      1,
+      registry,
+    );
+
+    expect(step?.actions.map((action) => action.estimatedDomStepsSaved)).toEqual([3, undefined]);
   });
 });

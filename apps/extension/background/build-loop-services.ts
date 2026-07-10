@@ -14,6 +14,7 @@ import {
   type LoopServices,
 } from '@aegis/agent';
 import { createModelRouter, loadModelRoutingConfig, ProviderRegistry } from '@aegis/llm';
+import { registerWebMcpTools, type WebMcpSource } from '@aegis/mcp';
 import {
   createChromeCdpSession,
   getPerceptionPayload,
@@ -21,9 +22,21 @@ import {
   type CdpSession,
 } from '@aegis/perception';
 import { createPolicyEngine, createPolicyStore, sanitizePageContent } from '@aegis/security';
-import { err, isErr, ok, type Result, type StoragePort } from '@aegis/shared';
+import { err, isErr, isOk, ok, type Result, type StoragePort } from '@aegis/shared';
 
 import { createPolicyService } from './policy-service';
+
+/** Used when no `WebMcpSource` is supplied (e.g. tests that don't exercise WebMCP) — resolves to no tools, matching a page with WebMCP absent. */
+const NO_WEBMCP_TOOLS_SOURCE: WebMcpSource = {
+  listTools: () => Promise.resolve(ok([])),
+  callTool: (name) =>
+    Promise.resolve(
+      err({ message: `No WebMCP source configured for this run (calling "${name}")` }),
+    ),
+  onToolsChanged: () => () => {
+    // No source, so it can never change.
+  },
+};
 
 export type BuildLoopServicesErrorCode = 'MODEL_ROUTING_NOT_CONFIGURED' | 'STORAGE_FAILED';
 
@@ -63,6 +76,7 @@ async function resolveOrigin(tabId: number): Promise<string> {
 export async function buildLoopServices(
   storage: StoragePort,
   tabId: number,
+  webMcpSource: WebMcpSource = NO_WEBMCP_TOOLS_SOURCE,
 ): Promise<Result<BuiltLoop, BuildLoopServicesError>> {
   const configResult = await loadModelRoutingConfig(storage);
   if (isErr(configResult)) {
@@ -86,6 +100,10 @@ export async function buildLoopServices(
   const executorContext: ExecutorContext = { session, tabManager };
   const actionRunner = createActionRunner();
   const toolRegistry = createDefaultToolRegistry();
+  // WebMCP is opportunistic (docs/adr/0035-webmcp-detection-and-adapter.md) — a failed
+  // registration (e.g. no bridge ever connected for this tab) must never fail task
+  // start; it just means no `source: "webmcp"` tools are available this run.
+  const webMcpRegistration = await registerWebMcpTools(toolRegistry, webMcpSource);
   const policyEngine = createPolicyEngine(createPolicyStore(storage));
   const checkPolicy = createPolicyService(policyEngine, () => resolveOrigin(tabId), toolRegistry);
 
@@ -106,6 +124,11 @@ export async function buildLoopServices(
     executorContext,
     toolRegistry,
     attach: () => session.attach(),
-    detach: () => session.detach(),
+    detach: () => {
+      if (isOk(webMcpRegistration)) {
+        webMcpRegistration.value.unregister();
+      }
+      return session.detach();
+    },
   });
 }

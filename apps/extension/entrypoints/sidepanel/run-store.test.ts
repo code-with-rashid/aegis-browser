@@ -31,6 +31,7 @@ function traceStepFixture(overrides: Partial<TraceStep> = {}): TraceStep {
         source: 'browser',
         description: 'Click "Add to cart"',
         argsSummary: JSON.stringify({ type: 'click', ref: toElementRef('ax:1') }),
+        estimatedDomStepsSaved: undefined,
         succeeded: true,
         errorMessage: undefined,
       },

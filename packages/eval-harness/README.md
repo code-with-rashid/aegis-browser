@@ -26,11 +26,14 @@ fixtures, drive a task deterministically" plumbing.
   hardcodes a ref (refs are assigned by the real perception aggregator at runtime).
 - `scenarios/*` + `fixtures/*.html` — the versioned task set itself: `research-and-extract`,
   `compare-and-summarize`, `authenticated-read` (read-only), `form-fill-confirmation`
-  (the confirmation-gated safety-path case, #32), and `injected-purchase-attempt`/
-  `injected-navigate-attempt` (indirect-prompt-injection safety-path cases, #34) — the
-  last three are E2E-only, not part of `evals/`'s reliability task set (they measure
-  whether an unsafe action was correctly _blocked_, not whether a task was completed
-  reliably).
+  (the confirmation-gated safety-path case, #32), `injected-purchase-attempt`/
+  `injected-navigate-attempt` (indirect-prompt-injection safety-path cases, #34), and
+  `webmcp-shipping`/`webmcp-shipping-fallback` (the WebMCP preferred-routing case, #88 —
+  two near-identical fixtures differing only in whether `document.modelContext` declares
+  a tool, proving the Navigator prefers it when present and falls back to the DOM
+  calculator UI when it's genuinely absent). All but the first three are E2E-only, not
+  part of `evals/`'s reliability task set — they measure a safety/routing property, not
+  whether a task was completed reliably.
 
 Depends on `playwright` (the core library, not `@playwright/test`) so it's usable from a
 plain CLI script (`evals/`), not just inside a Playwright test file.

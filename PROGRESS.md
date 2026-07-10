@@ -83,7 +83,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M10 — WebMCP fast-path
 
 - [x] #87 P2-8 WebMCP detection + adapter — blocked by: #80
-- [ ] #88 P2-9 WebMCP preferred-action routing — blocked by: #87, #82
+- [x] #88 P2-9 WebMCP preferred-action routing — blocked by: #87, #82
 
 ### M11 — UX & governance
 
@@ -326,6 +326,21 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   `packages/mcp/package.json` had no `sideEffects: false`; fixed, plus moved test-only
   exports to a `@aegis/mcp/testing` subpath — content scripts now ship at ~2-5KB. No live
   wiring into a running task's `ToolRegistry` yet — deferred to #88.
+- [0036](docs/adr/0036-webmcp-preferred-action-routing.md) — WebMCP preferred-action
+  routing (Phase 2, issue #88): closes the gap #87 left open with a new
+  `background/webmcp-tab-bridge.ts` (a per-tab `WebMcpSource` over a `chrome.runtime`
+  port, mirroring `isolated-bridge.ts`'s own shape one level up), real relaying from
+  `webmcp-relay.content.ts`, and wiring into `buildLoopServices`/`createRunManager` -
+  finally making a detected WebMCP tool live in a running task's `ToolRegistry`.
+  "Preference" is one new paragraph in `NAVIGATOR_SYSTEM_PROMPT` (tool choice is already
+  the Navigator's own job; no separate routing code), and trace savings are a fixed,
+  documented estimate (`ESTIMATED_DOM_STEPS_PER_DECLARED_TOOL_CALL = 3`) credited to a
+  successful `mcp`/`webmcp` call. A new real E2E spec (two near-identical fixtures,
+  `webmcp-shipping.html`/`webmcp-shipping-fallback.html`) proves the tool path completes
+  in one `acting` cycle versus the DOM fallback's two, against the real built extension's
+  real content scripts and real background relay. The example tool is deliberately
+  read-only, since the confirmation UI still can't preview a non-browser tool call
+  (`buildConfirmationRequest` stays `Action[]`-only) - that gap is explicitly #90's job.
 
 ## Notes
 
@@ -362,3 +377,5 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
 - #86 (MCP permissioning) merged 2026-07-10 — see ADR 0034. Final issue in M9.
 - #87 (WebMCP detection + adapter) merged 2026-07-10 — see ADR 0035. First issue in M10;
   `apps/extension` gains its first `@aegis/mcp` dependency and its first content scripts.
+- #88 (WebMCP preferred-action routing) merged 2026-07-10 — see ADR 0036. Final issue in
+  M10 — a WebMCP tool is now live end-to-end, from page declaration to Navigator call.
