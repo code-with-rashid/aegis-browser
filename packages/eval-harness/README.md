@@ -35,12 +35,17 @@ fixtures, drive a task deterministically" plumbing.
   `webmcp-shipping`/`webmcp-shipping-fallback` (the WebMCP preferred-routing case, #88 —
   two near-identical fixtures differing only in whether `document.modelContext` declares
   a tool, proving the Navigator prefers it when present and falls back to the DOM
-  calculator UI when it's genuinely absent), and `mcp-tool-task`/`mcp-tool-confirmation`
+  calculator UI when it's genuinely absent), `mcp-tool-task`/`mcp-tool-confirmation`
   (a real MCP tool completing a task end to end, and a state-changing MCP tool call
   requiring confirmation before it genuinely runs, #91 — against a real `MockMcpServer`
-  from `@aegis/mcp/testing`, not a fixture page, since an MCP tool has no page to run in).
-  All but the first three are E2E-only, not part of `evals/`'s reliability task set — they
-  measure a safety/routing property, not whether a task was completed reliably.
+  from `@aegis/mcp/testing`, not a fixture page, since an MCP tool has no page to run in),
+  and `hostile-tool-description`/`hostile-webmcp-tool-confirmation`/
+  `hostile-mcp-tool-confirmation` (#92 — a malicious tool _description_ proven sanitized
+  in the real Navigator prompt, and hostile WebMCP/MCP tools whose descriptions bait an
+  unauthorized call, proven blocked by the alignment critic before confirmation, mirroring
+  `injected-purchase-attempt`'s worst-case-Navigator principle). `webmcp-shipping` and
+  `mcp-tool-task` are also part of `evals/`'s reliability task set; the rest are E2E-only —
+  they measure a safety/routing property, not whether a task was completed reliably.
 
 Depends on `playwright` (the core library, not `@playwright/test`) so it's usable from a
 plain CLI script (`evals/`), not just inside a Playwright test file.

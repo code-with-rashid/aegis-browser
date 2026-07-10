@@ -72,6 +72,7 @@ export async function runTask(task: EvalTask, options: RunTaskOptions): Promise<
   let fakeServer: FakeModelServerHandle | undefined;
   const extension = await launchExtension(options.extensionPath);
 
+  let teardownSetup: (() => Promise<void>) | undefined;
   try {
     if (options.mode.kind === 'mock') {
       fakeServer = await startFakeModelServer(task.createResponder());
@@ -79,6 +80,8 @@ export async function runTask(task: EvalTask, options: RunTaskOptions): Promise<
     } else {
       await seedLiveProviderConfig(extension.serviceWorker, options.mode.provider);
     }
+
+    teardownSetup = await task.setup?.(extension.serviceWorker);
 
     const fixturePage = await extension.context.newPage();
     await fixturePage.goto(`${staticServer.baseUrl}/${task.fixture}`);
@@ -102,7 +105,10 @@ export async function runTask(task: EvalTask, options: RunTaskOptions): Promise<
     return {
       taskId: task.id,
       outcome: parseOutcome(text),
-      summaryMatched: text.includes(task.expectedSummaryContains),
+      // Case-insensitive, matching Playwright's own `getByText` default (the same
+      // summary substring the E2E suite already treats as a match) — a scenario's
+      // rendered summary can legitimately differ in case (e.g. a lowercased sentence).
+      summaryMatched: text.toLowerCase().includes(task.expectedSummaryContains.toLowerCase()),
       stepCount,
       replanCount,
       durationMs: Date.now() - startedAt,
@@ -118,6 +124,7 @@ export async function runTask(task: EvalTask, options: RunTaskOptions): Promise<
       error: cause instanceof Error ? cause.message : String(cause),
     };
   } finally {
+    await teardownSetup?.();
     await extension.close();
     await fakeServer?.close();
     await staticServer.close();

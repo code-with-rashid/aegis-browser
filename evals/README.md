@@ -24,11 +24,15 @@ pnpm --filter @aegis/evals eval     # mock mode — deterministic, no API key ne
 
 ## The task set
 
-`src/task-set.ts`'s `TASK_SET` is the versioned set `pnpm eval` runs — currently the same
-three read-only scenarios `apps/extension/e2e/read-only-use-cases.spec.ts` proves in CI
-(`research-and-extract`, `compare-and-summarize`, `authenticated-read`), imported directly
-from `@aegis/eval-harness` so the E2E suite and this reliability harness can never
-silently drift apart on what a scenario is supposed to do.
+`src/task-set.ts`'s `TASK_SET` is the versioned set `pnpm eval` runs — the three read-only
+scenarios `apps/extension/e2e/read-only-use-cases.spec.ts` proves in CI
+(`research-and-extract`, `compare-and-summarize`, `authenticated-read`) plus two tool-use
+tasks (#92): `webmcp-shipping` (a WebMCP fixture tool, no extra infra needed — the page
+declares the tool itself) and `mcp-tool-task` (a real MCP tool, via a `setup` hook that
+starts a `MockMcpServer` and seeds it into storage before the run, and tears it down
+after). All five are imported directly from `@aegis/eval-harness` so the E2E suite and
+this reliability harness can never silently drift apart on what a scenario is supposed to
+do.
 
 ### Adding a task
 
@@ -41,7 +45,10 @@ silently drift apart on what a scenario is supposed to do.
    than hardcoding an element ref, since refs are assigned by the real perception
    aggregator at runtime).
 3. Export the new constants from `packages/eval-harness/src/index.ts`.
-4. Add an entry to `TASK_SET` in `src/task-set.ts` and bump `TASK_SET_VERSION`.
+4. Add an entry to `TASK_SET` in `src/task-set.ts` and bump `TASK_SET_VERSION`. If the
+   task needs live infra beyond the fake model/static servers `runTask` always starts
+   (e.g. a real MCP server), give it a `setup(worker)` that returns a teardown — see
+   `mcp-tool-task`'s entry.
 5. Optionally also add it to `apps/extension/e2e/read-only-use-cases.spec.ts`'s
    `SCENARIOS` array if it should also be a CI correctness check, not just a reliability
    measurement.

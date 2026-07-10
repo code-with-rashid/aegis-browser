@@ -93,7 +93,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M12 — Integration & release
 
 - [x] #91 P2-12 E2E: MCP + WebMCP tasks — blocked by: #88, #90
-- [ ] #92 P2-13 Tool-use evals + security suite — blocked by: #91
+- [x] #92 P2-13 Tool-use evals + security suite — blocked by: #91
 - [ ] #93 P2-14 Docs + v0.2 — blocked by: #92
 
 ## ADR log
@@ -377,6 +377,19 @@ PendingToolCallPreview[]` field (any source, via `describeToolCall` + `summarize
   instead — `orderCalls === 0` pre-approval, `=== 1` only after. New `seedMcpServer`
   (`@aegis/eval-harness`) mirrors `seedModelRoutingConfig`'s shape without taking on
   `@aegis/mcp` as a dependency.
+- [0040](docs/adr/0040-tool-use-evals-and-security-suite.md) — Tool-use evals + security
+  suite (Phase 2, issue #92): `evals/`'s `TASK_SET` gains `webmcp-shipping` (a drop-in) and
+  `mcp-tool-task` (via a new generic `EvalTask.setup` hook that starts/tears down a real
+  `MockMcpServer`) — found and fixed a real, latent case-sensitivity bug in the reliability
+  scorer's summary-substring match while wiring the first one in. A new
+  `apps/extension/e2e/hostile-tool-security.spec.ts` proves a malicious tool _description_
+  is neutralized in the real, live Navigator prompt (not just a mocked `sanitize` stub),
+  and that hostile WebMCP/MCP tools baiting an unauthorized call are blocked by the
+  alignment critic before confirmation, mirroring `injected-purchase-attempt`'s
+  worst-case-Navigator principle. `injection-fixtures.test.ts` gains matching unit-level
+  fixtures for both the guaranteed case (imperative phrasing, neutralized) and the
+  documented limitation (plausible-sounding bait, survives by design — the critic is the
+  real defense). Confirmed no tool-output-based exfiltration vector exists to test today.
 
 ## Notes
 
