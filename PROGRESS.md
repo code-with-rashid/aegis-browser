@@ -94,7 +94,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #91 P2-12 E2E: MCP + WebMCP tasks — blocked by: #88, #90
 - [x] #92 P2-13 Tool-use evals + security suite — blocked by: #91
-- [ ] #93 P2-14 Docs + v0.2 — blocked by: #92
+- [x] #93 P2-14 Docs + v0.2 — blocked by: #92
 
 ## ADR log
 
@@ -390,6 +390,13 @@ PendingToolCallPreview[]` field (any source, via `describeToolCall` + `summarize
   fixtures for both the guaranteed case (imperative phrasing, neutralized) and the
   documented limitation (plausible-sounding bait, survives by design — the critic is the
   real defense). Confirmed no tool-output-based exfiltration vector exists to test today.
+- [0041](docs/adr/0041-v0-2-0-release.md) — v0.2.0 release (Phase 2, issue #93): root
+  `README.md` gains an "MCP & WebMCP tools" section grounded in the real options-page UI
+  text; `docs/DESIGN.md` gains §16 documenting what Phase 2 actually shipped (and what it
+  deliberately didn't — elicitation UI, cross-process vault access); `apps/extension/
+README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gains one
+  `[0.2.0]` entry covering four real bugs found while building Phase 2; every package
+  bumped `0.1.1` → `0.2.0`, mirroring the `v0.1.1` patch release's own bump mechanics.
 
 ## Notes
 
@@ -430,3 +437,13 @@ PendingToolCallPreview[]` field (any source, via `describeToolCall` + `summarize
   M10 — a WebMCP tool is now live end-to-end, from page declaration to Navigator call.
 - #89 (Tools & MCP management UI) merged 2026-07-10 — see ADR 0037. First issue in M11;
   a configured MCP server is now also live end-to-end, from the options page to a run.
+- #90 (trace + confirmation for tool calls) merged 2026-07-10 — see ADR 0038. Final issue
+  in M11 — a `state_changing` MCP/WebMCP call now gets a real confirmation preview.
+- #91 (E2E: MCP + WebMCP tasks) merged 2026-07-10 — see ADR 0039. First issue in M12; the
+  WebMCP half was already covered by #88's spec, so the new work is a real-MCP-server E2E.
+- #92 (tool-use evals + security suite) merged 2026-07-10 — see ADR 0040. `pnpm eval`
+  gains tool-use coverage; the security suite gains a hostile-tool corpus.
+- #93 (docs + v0.2.0 release) — this issue: MCP/WebMCP setup documented in the root
+  README and `docs/DESIGN.md` §16; every package bumped to `0.2.0`; `CHANGELOG.md` gains
+  a `[0.2.0]` entry. Final issue in M12 — every Phase 2 issue (#80–#93) closed.
+- v0.2.0 (2026-07-10): Phase 2 release. See `CHANGELOG.md` and the `v0.2.0` tag.

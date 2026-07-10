@@ -240,6 +240,43 @@ sees them, live, in that run's `ToolRegistry` from the first `deciding` step
 content script yet, or WebMCP genuinely absent on that page) fails safe to "no tools" —
 never blocks or fails task start.
 
+## Tool-call-aware trace + confirmation (#90)
+
+See [ADR 0038](../../docs/adr/0038-trace-confirmation-tool-calls.md). Before this, a
+`state_changing` MCP/WebMCP tool call had no confirmation preview at all —
+`buildConfirmationRequest` only ever knew about browser `Action`s.
+
+- `ConfirmationRequest` gains `toolCalls` (every pending call, any source, each described
+  via `describeToolCall`/`summarizeArgs`) — this is what `confirmation-modal.tsx`'s main
+  view renders; the existing `actions`/`preview` fields stay browser-only, feeding only
+  the "Edit" flow (disabled when nothing in the batch is a browser action).
+- `trace-list.tsx` gains a visible source badge (`mcp`/`webmcp`, distinct from a plain
+  browser action) and an expandable "Show args" revealing the tool id + args summary, per
+  action — previously that detail existed in `TraceActionEntry` but was never rendered.
+
+## E2E: MCP + WebMCP tool tasks (#91)
+
+See [ADR 0039](../../docs/adr/0039-e2e-mcp-webmcp-tool-tasks.md). `e2e/mcp-tool-task.spec.ts`
+drives the real built extension against a real `MockMcpServer` (`@aegis/mcp/testing`) over
+genuine Streamable HTTP: one scenario completes a task via a `read`-risk tool with zero
+page interaction, one proves a `state_changing` tool call genuinely blocks on confirmation
+before it runs — since an MCP tool has no page DOM to check, the proof is the mock
+server's own call count staying zero until Approve. The WebMCP half of this issue's scope
+was already covered by the existing `webmcp-preferred-routing.spec.ts` (#88).
+
+## Tool-use evals + hostile-tool security suite (#92)
+
+See [ADR 0040](../../docs/adr/0040-tool-use-evals-and-security-suite.md).
+`evals/`'s `TASK_SET` gained `webmcp-shipping` and `mcp-tool-task` (reusing #88/#91's own
+scenarios, so reliability measurement can never silently drift from what CI proves
+correct). `e2e/hostile-tool-security.spec.ts` extends the #34 security suite to
+tool-declared attacks: a malicious tool _description_ is proven neutralized in the real,
+live Navigator prompt (not just a mocked `sanitize` stub); a hostile WebMCP tool and a
+hostile MCP tool, each baiting an unauthorized call via their own description, are proven
+blocked by the alignment critic before confirmation — mirroring
+`injected-purchase-attempt.ts`'s worst-case-Navigator principle, just sourced from a
+tool's own description instead of page content.
+
 ## Commands
 
 ```bash
@@ -248,7 +285,8 @@ pnpm build    # production build to .output/chrome-mv3
 pnpm build:edge
 pnpm test     # vitest — messaging, store, and composition-root logic (no chrome.* needed);
               # confirmation-modal.test.tsx opts into a jsdom environment for DOM rendering
-pnpm e2e      # Playwright — the real built extension against local fixture pages (#31)
+pnpm e2e      # Playwright — the real built extension against local fixture pages
+              # (read-only/confirmation/security/MCP/WebMCP scenarios, #31-#92)
 ```
 
 ## Note on `chrome.debugger`
