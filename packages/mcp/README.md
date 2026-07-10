@@ -153,8 +153,10 @@ if (isOk(result)) {
 MCP servers can ask the connecting client for input mid-call ("elicitation"). Supplying
 `CreateMcpClientOptions.onElicitationRequest` (an `ElicitationHandler`) advertises the
 `elicitation` capability and answers requests through it; omitting it means the client
-never advertises the capability, so a well-behaved server simply won't ask. Nothing wires
-a real handler through the confirmation UI yet — that's #90.
+never advertises the capability, so a well-behaved server simply won't ask. #90 gave the
+confirmation gate a real tool-call-aware preview (any source, not just browser actions),
+but that's the policy engine's pre-call approval, not this mid-call elicitation prompt —
+routing a real handler through a UI remains unscheduled.
 
 ## Tool permissioning (`policy/`)
 

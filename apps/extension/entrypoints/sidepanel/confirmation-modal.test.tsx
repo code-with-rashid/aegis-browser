@@ -18,9 +18,17 @@ function queryByRole(role: Parameters<typeof screen.queryByRole>[0], options?: B
 }
 
 function requestFixture(overrides: Partial<ConfirmationRequest> = {}): ConfirmationRequest {
+  const actions = overrides.actions ?? [{ type: 'click', ref: toElementRef('ax:1') }];
+  const preview = overrides.preview ?? ['Click "Submit Order"'];
   return {
-    actions: [{ type: 'click', ref: toElementRef('ax:1') }],
-    preview: ['Click "Submit Order"'],
+    toolCalls: actions.map((actionValue, index) => ({
+      toolId: `browser.${actionValue.type}`,
+      source: 'browser' as const,
+      description: preview[index] ?? actionValue.type,
+      argsSummary: JSON.stringify(actionValue),
+    })),
+    actions,
+    preview,
     reason: 'Submit Order is state-changing',
     ...overrides,
   };
@@ -88,6 +96,63 @@ describe('ConfirmationModal', () => {
     await user.click(getByRole('button', { name: 'Reject' }));
 
     expect(onReject).toHaveBeenCalledOnce();
+  });
+
+  it('shows a source badge and description for a non-browser (MCP/WebMCP) tool call, distinct from a plain browser action (#90)', () => {
+    render(
+      <ConfirmationModal
+        request={requestFixture({
+          toolCalls: [
+            {
+              toolId: 'browser.click',
+              source: 'browser',
+              description: 'Click "Submit Order"',
+              argsSummary: '{}',
+            },
+            {
+              toolId: 'mcp.weather.get_forecast',
+              source: 'mcp',
+              description: 'Call tool "mcp.weather.get_forecast" (Sends the forecast request)',
+              argsSummary: '{"city":"London"}',
+            },
+          ],
+        })}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Click "Submit Order"')).toBeInTheDocument();
+    expect(
+      screen.getByText('Call tool "mcp.weather.get_forecast" (Sends the forecast request)'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('mcp')).toBeInTheDocument();
+    expect(screen.queryByText('browser')).not.toBeInTheDocument();
+  });
+
+  it('disables Edit when nothing in the pending batch is a browser action', () => {
+    render(
+      <ConfirmationModal
+        request={requestFixture({
+          actions: [],
+          preview: [],
+          toolCalls: [
+            {
+              toolId: 'mcp.weather.get_forecast',
+              source: 'mcp',
+              description: 'Call tool "mcp.weather.get_forecast" (Sends the forecast request)',
+              argsSummary: '{"city":"London"}',
+            },
+          ],
+        })}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onEdit={vi.fn()}
+      />,
+    );
+
+    expect(getByRole('button', { name: 'Edit' })).toBeDisabled();
   });
 
   it('a native cancel event (Escape) is treated as Reject, never a silent dismiss', () => {

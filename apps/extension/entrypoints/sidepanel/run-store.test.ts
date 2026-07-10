@@ -12,6 +12,14 @@ function panelAndBackgroundPorts() {
 
 function confirmationFixture(overrides: Partial<ConfirmationRequest> = {}): ConfirmationRequest {
   return {
+    toolCalls: [
+      {
+        toolId: 'browser.click',
+        source: 'browser',
+        description: 'Click "Submit Order"',
+        argsSummary: JSON.stringify({ type: 'click', ref: toElementRef('ax:1') }),
+      },
+    ],
     actions: [{ type: 'click', ref: toElementRef('ax:1') }],
     preview: ['Click "Submit Order"'],
     reason: 'submit order is state-changing',

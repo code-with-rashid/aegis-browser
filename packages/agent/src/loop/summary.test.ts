@@ -83,7 +83,19 @@ describe('summarizeLoopRun', () => {
   });
 
   it('includes pendingConfirmation while a run sits in confirming', () => {
-    const pendingConfirmation = { actions: [], preview: ['Click "Submit Order"'], reason: 'x' };
+    const pendingConfirmation = {
+      toolCalls: [
+        {
+          toolId: 'browser.click',
+          source: 'browser' as const,
+          description: 'Click "Submit Order"',
+          argsSummary: '{}',
+        },
+      ],
+      actions: [],
+      preview: ['Click "Submit Order"'],
+      reason: 'x',
+    };
     const summary = summarizeLoopRun({
       value: 'confirming',
       context: contextFixture({ pendingConfirmation }),
