@@ -53,3 +53,11 @@ export {
   INJECTED_NAVIGATE_ATTEMPT_EXPECTED_SUMMARY,
   createInjectedNavigateAttemptResponder,
 } from './scenarios/injected-navigate-attempt';
+export {
+  WEBMCP_SHIPPING_TASK,
+  WEBMCP_SHIPPING_EXPECTED_SUMMARY,
+  WEBMCP_SHIPPING_FIXTURE,
+  WEBMCP_SHIPPING_FALLBACK_FIXTURE,
+  createWebMcpShippingResponder,
+  createWebMcpShippingFallbackResponder,
+} from './scenarios/webmcp-shipping';

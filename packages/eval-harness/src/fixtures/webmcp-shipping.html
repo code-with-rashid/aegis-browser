@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Freight Co Shipping</title>
+  </head>
+  <body>
+    <h1>Freight Co Shipping</h1>
+    <label for="destination">Destination</label>
+    <select id="destination">
+      <option value="">Choose a destination</option>
+      <option value="Freedonia">Freedonia</option>
+    </select>
+    <button
+      id="calculate"
+      type="button"
+      onclick="
+        var dest = document.getElementById('destination').value;
+        if (dest) {
+          document.getElementById('estimate').textContent =
+            'Estimated delivery: 5-7 business days to ' + dest + '.';
+          document.getElementById('estimate').hidden = false;
+        }
+      "
+    >
+      Calculate
+    </button>
+    <p id="estimate" hidden></p>
+    <script>
+      (function () {
+        // A minimal, real-shape polyfill of `document.modelContext`
+        // (https://webmachinelearning.github.io/webmcp/) — declares one read-only tool
+        // that looks up the estimate directly, without the calculator UI at all.
+        class FixtureModelContext extends EventTarget {
+          getTools() {
+            return [
+              {
+                name: 'get_shipping_estimate',
+                description: 'Looks up the shipping estimate for a destination.',
+                inputSchema: {
+                  type: 'object',
+                  properties: { destination: { type: 'string' } },
+                  required: ['destination'],
+                },
+                annotations: { readOnlyHint: true },
+                execute(input) {
+                  var text = 'Estimated delivery: 5-7 business days to ' + input.destination + '.';
+                  document.getElementById('estimate').textContent = text;
+                  document.getElementById('estimate').hidden = false;
+                  return text;
+                },
+              },
+            ];
+          }
+        }
+        document.modelContext = new FixtureModelContext();
+      })();
+    </script>
+  </body>
+</html>

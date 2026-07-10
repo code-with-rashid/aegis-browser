@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Freight Co Shipping</title>
+  </head>
+  <body>
+    <h1>Freight Co Shipping</h1>
+    <label for="destination">Destination</label>
+    <select id="destination">
+      <option value="">Choose a destination</option>
+      <option value="Freedonia">Freedonia</option>
+    </select>
+    <button
+      id="calculate"
+      type="button"
+      onclick="
+        var dest = document.getElementById('destination').value;
+        if (dest) {
+          document.getElementById('estimate').textContent =
+            'Estimated delivery: 5-7 business days to ' + dest + '.';
+          document.getElementById('estimate').hidden = false;
+        }
+      "
+    >
+      Calculate
+    </button>
+    <p id="estimate" hidden></p>
+    <!-- Deliberately no `document.modelContext` at all — the same page as
+         `webmcp-shipping.html` minus WebMCP, for the fallback-to-DOM scenario (#88). -->
+  </body>
+</html>

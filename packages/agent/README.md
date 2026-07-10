@@ -219,10 +219,22 @@ transform-free `LlmActionSchema` mirror, which is no longer needed — see
 `resolveToolCalls` (`navigator/resolve-tool-calls.ts`) validates each raw `{toolId, args}`
 against that tool's own `inputSchema`, producing both the authoritative `toolCalls` and a
 derived `actions: Action[]` (the `source: "browser"` subset, re-parsed through the real,
-branded action schemas) — `actions` is what feeds the policy engine, alignment critic,
-confirmation UI, and trace, none of which are tool-call-aware yet (#82, #90 generalize
-them). An unknown `toolId` or schema-invalid `args` is collected as an issue rather than
-thrown.
+branded action schemas). The policy engine, alignment critic, and trace are already
+tool-call-aware (`toolCalls`, any source — #82, #86); `actions` still feeds only the
+confirmation UI's preview (`buildConfirmationRequest` takes `Action[]`), which stays
+browser-only until #90 generalizes it. An unknown `toolId` or schema-invalid `args` is
+collected as an issue rather than thrown.
+
+A tool id starting with `mcp.` or `web.` is a _declared_ capability, and
+`NAVIGATOR_SYSTEM_PROMPT` tells the model to prefer calling one directly over a sequence
+of DOM actions when it covers the sub-goal (#88) — there's no separate routing/decision
+code, since tool _choice_ is the Navigator's whole job already; the instruction just
+shapes it. When a declared-tool call succeeds, `buildTraceStep` credits it
+`ESTIMATED_DOM_STEPS_PER_DECLARED_TOOL_CALL` (a fixed, documented estimate, not a
+measurement — there's no way to know how many DOM steps a goal would have actually taken
+without also running that path) as `TraceActionEntry.estimatedDomStepsSaved`, so the
+trade-off is visible in the trace UI. See
+`docs/adr/0036-webmcp-preferred-action-routing.md`.
 
 `findHallucinatedRefs` (`navigator/hallucinated-refs.ts`) then checks every derived
 action's `ref` (where one applies) against `perception.elements`. A schema-valid action

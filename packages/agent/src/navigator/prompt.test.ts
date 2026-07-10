@@ -31,6 +31,10 @@ describe('NAVIGATOR_SYSTEM_PROMPT', () => {
     expect(NAVIGATOR_SYSTEM_PROMPT).toContain('Never invent a ref');
     expect(NAVIGATOR_SYSTEM_PROMPT).toContain('<untrusted-page-content>');
   });
+
+  it('instructs the model to prefer a covering declared tool over DOM actions (#88)', () => {
+    expect(NAVIGATOR_SYSTEM_PROMPT).toContain('prefer calling it over a sequence of');
+  });
 });
 
 describe('buildNavigatorPrompt', () => {

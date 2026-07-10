@@ -190,6 +190,28 @@ assert — that spoofed-CAPTCHA/malicious-URL bait survives text sanitization by
 since it's linguistically indistinguishable from legitimate copy; the structural defenses
 above are what actually stop it.
 
+## WebMCP bridge (Phase 2, #87/#88)
+
+`entrypoints/webmcp-page-bridge.content.ts` (`world: "MAIN"`) and
+`entrypoints/webmcp-relay.content.ts` (default ISOLATED world) install the two halves of
+`@aegis/mcp`'s WebMCP bridge (`docs/adr/0035-webmcp-detection-and-adapter.md`) into every
+page — the MAIN-world script is the only code with real access to a page's own
+`document.modelContext`; the ISOLATED-world script relays its tool list and call requests
+to the background over a new per-tab port (`messaging/webmcp-protocol.ts`,
+`WEBMCP_TAB_PORT_NAME`), since it has real `chrome.*` access instead.
+
+`background/webmcp-tab-bridge.ts`'s `createWebMcpTabBridge()` is the background's end of
+that port: a per-tab `WebMcpSource` (`@aegis/mcp`) backed by whatever the connected
+content script has reported, with the same bounded-wait-for-a-first-snapshot and
+resync-via-`onToolsChanged` shape `isolated-bridge.ts` itself already uses, one level up.
+`entrypoints/background.ts` wires `listenForWebMcpTabConnections` to it and passes
+`webMcpTabBridge.getSource` into `createRunManager`, which threads it into
+`buildLoopServices` — so a task started on a tab whose page already declared WebMCP tools
+sees them, live, in that run's `ToolRegistry` from the first `deciding` step
+(`docs/adr/0036-webmcp-preferred-action-routing.md`). A tab with no connected bridge (no
+content script yet, or WebMCP genuinely absent on that page) fails safe to "no tools" —
+never blocks or fails task start.
+
 ## Commands
 
 ```bash

@@ -1,5 +1,6 @@
 import type { MessagePort } from './port';
 import { RUN_BRIDGE_PORT_NAME } from './protocol';
+import { WEBMCP_TAB_PORT_NAME } from './webmcp-protocol';
 
 function wrapChromePort<TSend, TReceive>(port: chrome.runtime.Port): MessagePort<TSend, TReceive> {
   return {
@@ -41,6 +42,35 @@ export function listenForPanelConnections<TSend, TReceive>(
       return;
     }
     onConnection(wrapChromePort(port));
+  };
+  chrome.runtime.onConnect.addListener(listener);
+  return () => {
+    chrome.runtime.onConnect.removeListener(listener);
+  };
+}
+
+/** The WebMCP relay content script's end — call once when it installs. */
+export function connectWebMcpTabBridge<TSend, TReceive>(): MessagePort<TSend, TReceive> {
+  return wrapChromePort(chrome.runtime.connect({ name: WEBMCP_TAB_PORT_NAME }));
+}
+
+/**
+ * The background's end — call once at startup; invokes `onConnection` with the
+ * connecting tab's id for each WebMCP relay content script that connects. A port whose
+ * sender has no tab (e.g. a devtools page) is ignored — this bridge is tab-scoped only.
+ */
+export function listenForWebMcpTabConnections<TSend, TReceive>(
+  onConnection: (tabId: number, port: MessagePort<TSend, TReceive>) => void,
+): () => void {
+  const listener = (port: chrome.runtime.Port): void => {
+    if (port.name !== WEBMCP_TAB_PORT_NAME) {
+      return;
+    }
+    const tabId = port.sender?.tab?.id;
+    if (tabId === undefined) {
+      return;
+    }
+    onConnection(tabId, wrapChromePort(port));
   };
   chrome.runtime.onConnect.addListener(listener);
   return () => {

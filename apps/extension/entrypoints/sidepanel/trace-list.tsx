@@ -44,6 +44,12 @@ function TraceStepView({ step }: { step: TraceStep }): React.JSX.Element {
           <li key={index} className={action.succeeded ? '' : 'text-red-600'}>
             {action.succeeded ? 'OK' : 'FAILED'} — {action.description}
             {action.errorMessage !== undefined ? `: ${action.errorMessage}` : ''}
+            {action.estimatedDomStepsSaved !== undefined ? (
+              <span className="text-muted-foreground">
+                {' '}
+                (~{action.estimatedDomStepsSaved} DOM steps saved)
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>
