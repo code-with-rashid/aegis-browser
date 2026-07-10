@@ -13,6 +13,8 @@ export interface MockMcpToolSpec {
   readonly description?: string;
   /** A Zod raw shape (e.g. `{ city: z.string() }`) — omit for a zero-argument tool. */
   readonly inputSchema?: ZodRawShapeCompat;
+  /** Standard MCP tool hints (`readOnlyHint`/`destructiveHint`) — for testing risk inference (#85). */
+  readonly annotations?: { readonly readOnlyHint?: boolean; readonly destructiveHint?: boolean };
   handler(args: Record<string, unknown>): CallToolResult | Promise<CallToolResult>;
 }
 
@@ -26,6 +28,8 @@ export interface MockMcpServer {
   readonly url: string;
   /** Every request's headers, oldest first — lets a test assert an auth header was actually sent, and exactly what it contained. */
   readonly requestHeaders: readonly Readonly<Record<string, string | string[] | undefined>>[];
+  /** The underlying server instance — for advanced tests that need to register a tool after startup (e.g. one that triggers elicitation via `server.server.elicitInput(...)`). */
+  readonly server: McpServer;
   close(): Promise<void>;
 }
 
@@ -44,9 +48,14 @@ export async function startMockMcpServer(
   const mcpServer = new McpServer({ name: 'aegis-mock-mcp-server', version: '1.0.0' });
   for (const tool of tools) {
     const inputSchema = tool.inputSchema ?? {};
-    const config: { description?: string; inputSchema: ZodRawShapeCompat } = {
+    const config: {
+      description?: string;
+      inputSchema: ZodRawShapeCompat;
+      annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
+    } = {
       ...(tool.description !== undefined ? { description: tool.description } : {}),
       inputSchema,
+      ...(tool.annotations !== undefined ? { annotations: tool.annotations } : {}),
     };
     const callback: ToolCallback<ZodRawShapeCompat> = (args) => tool.handler(args);
     mcpServer.registerTool(tool.name, config, callback);
@@ -76,6 +85,7 @@ export async function startMockMcpServer(
   return {
     url: `http://127.0.0.1:${port}${MOCK_SERVER_PATH}`,
     requestHeaders,
+    server: mcpServer,
     async close() {
       await transport.close();
       await new Promise<void>((resolve, reject) => {

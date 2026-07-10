@@ -1,9 +1,9 @@
 # @aegis/mcp
 
 An `McpClient` for connecting to external MCP (Model Context Protocol) servers and
-calling their tools, user-facing server configuration + storage, plus a WebMCP page-tool
-adapter (#87, not yet built). Not wired into `@aegis/agent`'s `ToolRegistry` yet — that's
-#85.
+calling their tools, user-facing server configuration + storage, a bridge that registers
+an MCP server's tools into `@aegis/actions`' `ToolRegistry`, plus a WebMCP page-tool
+adapter (#87, not yet built).
 
 ## Transport: Streamable HTTP only
 
@@ -105,8 +105,49 @@ const headers = await resolveAuthHeaders(config.authHeaders, resolveSecret);
 
 `testMcpServerConnection(config, resolveSecret, options?)` (`config/test-connection.ts`)
 is the connection test the acceptance criteria asks for: resolves headers, connects,
-lists tools, and always disconnects — the same three steps a real `ToolRegistry` wiring
-(#85) will perform, so a passing test genuinely predicts the server will work once
-enabled.
+lists tools, and always disconnects — the exact same three steps
+`registerMcpServerTools` (below) performs, so a passing test genuinely predicts the
+server will work once enabled.
 
-Depends on `@aegis/shared`, `@modelcontextprotocol/sdk`, `zod`.
+## Registering MCP tools into the `ToolRegistry` (`registry/`)
+
+`registerMcpServerTools(registry, config, resolveSecret, options?)`
+(`registry/mcp-tool-registry.ts`) connects to an enabled `McpServerConnectionConfig`,
+lists its tools, and registers each as a `source: "mcp"` `Tool` (`@aegis/actions`) the
+Navigator can call (#81) and the policy engine can gate (#82) exactly like a built-in
+browser tool:
+
+```ts
+const result = await registerMcpServerTools(toolRegistry, serverConfig, resolveSecret);
+if (isOk(result)) {
+  // result.value.toolIds -> e.g. ["mcp.weather_co.get_forecast"]
+  // result.value.disconnect() -> call when the server is disabled/removed, or on teardown
+}
+```
+
+- **Tool ids are namespaced `mcp.<server>.<tool>`**, where `<server>` is the configured
+  server's display `name` reduced to `[a-z0-9_]`. This keeps ids stable and readable even
+  if two different servers each expose a tool with the same bare name.
+- **Risk is inferred from the tool's MCP annotations** (`inferMcpToolRisk`):
+  `readOnlyHint: true` → `read`; `destructiveHint: true`, or no annotations at all
+  (fail-safe) → `state_changing`.
+- **A tool's JSON Schema input becomes its `Tool.inputSchema`** via `jsonSchemaToZod`
+  (`registry/json-schema-to-zod.ts`) — a deliberately minimal converter (objects,
+  strings/numbers/integers/booleans/arrays/enums, required vs. optional, nested objects)
+  that falls back to `z.unknown()` for anything it doesn't recognize, rather than a
+  general-purpose JSON-Schema library. See `docs/adr/0033-mcp-tools-to-toolregistry.md`.
+- **Every tool registered from one call shares one `McpClient` connection**, kept open
+  for the tools' lifetime; `disconnect()` closes it once (not per tool).
+- **A tool's `isError: true` result becomes a `ToolExecutionError`** — the Navigator sees
+  a normal failed-tool-call outcome, not a client-level `McpClientError`, for a tool that
+  ran but failed on its own terms.
+
+### Elicitation
+
+MCP servers can ask the connecting client for input mid-call ("elicitation"). Supplying
+`CreateMcpClientOptions.onElicitationRequest` (an `ElicitationHandler`) advertises the
+`elicitation` capability and answers requests through it; omitting it means the client
+never advertises the capability, so a well-behaved server simply won't ask. Nothing wires
+a real handler through the confirmation UI yet — that's #90.
+
+Depends on `@aegis/shared`, `@aegis/actions`, `@modelcontextprotocol/sdk`, `zod`.

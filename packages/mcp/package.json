@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aegis/actions": "workspace:*",
     "@aegis/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.4.3"
