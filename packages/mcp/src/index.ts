@@ -15,9 +15,6 @@ export { createMcpClient } from './client/mcp-client';
 export type { McpClientErrorCode } from './client/errors';
 export { McpClientError } from './client/errors';
 
-export type { MockMcpToolSpec, MockMcpServer } from './testing/mock-mcp-server';
-export { startMockMcpServer, textResult } from './testing/mock-mcp-server';
-
 export type {
   McpAuthHeaderConfig,
   McpServerConnectionConfig,
@@ -54,3 +51,34 @@ export { createMcpToolPolicyStore } from './policy/mcp-tool-policy-store';
 
 export type { McpToolGateResult } from './policy/gate-mcp-tools';
 export { gateMcpTools } from './policy/gate-mcp-tools';
+
+export type { WebMcpToolAnnotations, WebMcpToolDescriptor } from './webmcp/webmcp-tool';
+
+export type { WebMcpSourceError, WebMcpToolCallResult, WebMcpSource } from './webmcp/webmcp-source';
+
+export { inferWebMcpToolRisk } from './webmcp/infer-webmcp-tool-risk';
+
+export type { RegisteredWebMcpTools } from './webmcp/register-webmcp-tools';
+export { registerWebMcpTools } from './webmcp/register-webmcp-tools';
+
+export type {
+  WebMcpToolsEventDetail,
+  WebMcpRequestSyncEventDetail,
+  WebMcpCallEventDetail,
+  WebMcpResultEventDetail,
+} from './webmcp/bridge-protocol';
+export {
+  WEBMCP_TOOLS_EVENT,
+  WEBMCP_REQUEST_SYNC_EVENT,
+  WEBMCP_CALL_EVENT,
+  WEBMCP_RESULT_EVENT,
+} from './webmcp/bridge-protocol';
+
+export type { WebMcpCapableTarget } from './webmcp/page-bridge';
+export { installWebMcpPageBridge } from './webmcp/page-bridge';
+
+export type {
+  CreateWebMcpEventBridgeSourceOptions,
+  WebMcpEventBridgeSource,
+} from './webmcp/isolated-bridge';
+export { createWebMcpEventBridgeSource } from './webmcp/isolated-bridge';

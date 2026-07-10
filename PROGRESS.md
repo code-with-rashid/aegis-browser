@@ -82,7 +82,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M10 — WebMCP fast-path
 
-- [ ] #87 P2-8 WebMCP detection + adapter — blocked by: #80
+- [x] #87 P2-8 WebMCP detection + adapter — blocked by: #80
 - [ ] #88 P2-9 WebMCP preferred-action routing — blocked by: #87, #82
 
 ### M11 — UX & governance
@@ -311,6 +311,21 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   `proposedToolCalls` instead, and `TraceStep`/`TraceActionEntry` gain `policyDecision`/
   `toolId`/`source`/`argsSummary` for audit. No live MCP server is wired into the running
   extension yet — deferred to #89, which also builds the UI to review pending tools.
+- [0035](docs/adr/0035-webmcp-detection-and-adapter.md) — WebMCP detection + adapter
+  (Phase 2, issue #87): targets `document.modelContext` (Chrome 150+'s current attribute
+  name). A two-world event bridge (`page-bridge.ts` MAIN-world / `isolated-bridge.ts`
+  ISOLATED-world, talking only over `bridge-protocol.ts`'s request/response events on the
+  shared `document`) since a live `execute` reference can't cross the MAIN/ISOLATED world
+  boundary. `registerWebMcpTools` wraps tools as `web.<name>`, fail-safe risk inference
+  (`readOnlyHint` -> `read`, else `state_changing`), and stays synced to the page's live
+  tool list via `onToolsChanged`. Real content scripts
+  (`webmcp-page-bridge.content.ts`/`webmcp-relay.content.ts`) wire both halves into the
+  actual extension; the ISOLATED half tears down via WXT's `ctx.onInvalidated`. Adding
+  `@aegis/mcp` as `apps/extension`'s first real dependency surfaced a real bug — both
+  content scripts bundled ~215KB each (nearly all of `@modelcontextprotocol/sdk`) because
+  `packages/mcp/package.json` had no `sideEffects: false`; fixed, plus moved test-only
+  exports to a `@aegis/mcp/testing` subpath — content scripts now ship at ~2-5KB. No live
+  wiring into a running task's `ToolRegistry` yet — deferred to #88.
 
 ## Notes
 
@@ -345,3 +360,5 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
 - #84 (MCP server config + storage) merged 2026-07-10 — see ADR 0032.
 - #85 (MCP tools → ToolRegistry) merged 2026-07-10 — see ADR 0033. Last issue in M9.
 - #86 (MCP permissioning) merged 2026-07-10 — see ADR 0034. Final issue in M9.
+- #87 (WebMCP detection + adapter) merged 2026-07-10 — see ADR 0035. First issue in M10;
+  `apps/extension` gains its first `@aegis/mcp` dependency and its first content scripts.

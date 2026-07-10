@@ -3,7 +3,12 @@
 An `McpClient` for connecting to external MCP (Model Context Protocol) servers and
 calling their tools, user-facing server configuration + storage, a bridge that registers
 an MCP server's tools into `@aegis/actions`' `ToolRegistry`, plus a WebMCP page-tool
-adapter (#87, not yet built).
+detection/adapter layer.
+
+Testing-only doubles (`startMockMcpServer`, `createFakeWebMcpSource`) live behind a
+separate `@aegis/mcp/testing` subpath, not this package's main entry point — so a real
+browser consumer (`apps/extension`'s WebMCP content scripts) never has a reason to bundle
+`mock-mcp-server.ts`'s real Node HTTP server. See `docs/adr/0035-webmcp-detection-and-adapter.md`.
 
 ## Transport: Streamable HTTP only
 
@@ -173,5 +178,40 @@ level — no MCP tool is ever auto-trusted (#86):
   Navigator nor callable (`ToolRegistry.call` returns `TOOL_UNKNOWN`).
 
 See `docs/adr/0034-mcp-tool-permissioning.md`.
+
+## WebMCP detection + adapter (`webmcp/`)
+
+Unlike MCP, WebMCP has no official client SDK and no browser-extension-facing discovery
+API — the spec itself declines to define how an agent outside the page (a browser
+extension, not same-page script) finds a page's declared tools. This package's
+`webmcp/` implements one interpretation, targeting `document.modelContext` (Chrome
+150+'s current attribute name; earlier drafts used `navigator.modelContext`).
+
+- **`WebMcpSource`** (`webmcp/webmcp-source.ts`) is the port: `listTools()`/`callTool()`/
+  `onToolsChanged()`. `registerWebMcpTools(registry, source)` (`webmcp/register-webmcp-tools.ts`)
+  wraps every tool a `WebMcpSource` reports as a `source: "webmcp"` `Tool`, id `web.<name>`
+  (flat — a WebMCP tool always belongs to whichever single page is active, unlike MCP's
+  `mcp.<server>.<tool>`), and stays in sync with the page's _live_ tool list via
+  `onToolsChanged` — a tool the page adds/removes after the initial snapshot is
+  registered/unregistered automatically. `inferWebMcpToolRisk` mirrors `inferMcpToolRisk`'s
+  fail-safe convention: `readOnlyHint: true` → `read`, anything else → `state_changing`.
+- **The real `WebMcpSource` is a two-world event bridge**, since a content script's
+  ISOLATED world (real `chrome.*`) and a page's MAIN world (real `document.modelContext`)
+  can't share JS object references — only structured-cloned event data crosses that
+  boundary. `webmcp/page-bridge.ts`'s `installWebMcpPageBridge` runs in the MAIN world
+  (the only place that can call a tool's real `execute`); `webmcp/isolated-bridge.ts`'s
+  `createWebMcpEventBridgeSource` runs in the ISOLATED world and implements `WebMcpSource`
+  entirely over the request/response event protocol in `webmcp/bridge-protocol.ts`. Both
+  are pure DOM/`EventTarget` code — no `chrome.*` — so they're unit-tested directly in
+  Node (real `EventTarget`/`CustomEvent` globals, no jsdom needed) against a fixture that
+  implements the actual WebMCP page-side spec shape (`webmcp/webmcp-bridge.test.ts`).
+- **`apps/extension/entrypoints/webmcp-page-bridge.content.ts`** (`world: "MAIN"`) and
+  **`webmcp-relay.content.ts`** (default ISOLATED world) are the real content scripts that
+  install each half in a running browser. The ISOLATED-world script tears itself down via
+  WXT's `ctx.onInvalidated`, which fires on navigation and tab close alike.
+- **No live wiring into a running task's `ToolRegistry` yet** — the content script detects
+  tools but doesn't relay them to the background, and `buildLoopServices` doesn't consult
+  them. That's #88's job (WebMCP preferred-action routing), the first issue that actually
+  needs a live WebMCP tool to route to. See `docs/adr/0035-webmcp-detection-and-adapter.md`.
 
 Depends on `@aegis/shared`, `@aegis/actions`, `@modelcontextprotocol/sdk`, `zod`.

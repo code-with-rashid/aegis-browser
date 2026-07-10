@@ -62,6 +62,9 @@ importers:
       '@aegis/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@aegis/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@aegis/perception':
         specifier: workspace:*
         version: link:../../packages/perception
