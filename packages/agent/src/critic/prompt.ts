@@ -1,4 +1,6 @@
-import { describeAction } from '../loop/confirmation';
+import type { ToolRegistry } from '@aegis/actions';
+
+import { describeToolCall } from '../loop/confirmation';
 import type { CriticCheckInput } from '../loop/services';
 import { identitySanitize, wrapUntrustedContent, type SanitizeText } from '../sanitize';
 
@@ -25,12 +27,16 @@ export interface BuildCriticPromptOptions {
 
 /**
  * Builds the Critic's prompt from {@link CriticCheckInput}: the user's original task (the
- * trusted anchor alignment is judged against), the current sub-goal, the proposed
- * action(s) in plain language, and — if perceived — the current page's content,
- * sanitized then wrapped as untrusted data, same as the Planner/Navigator/Verifier prompts.
+ * trusted anchor alignment is judged against), the current sub-goal, the proposed tool
+ * call(s) in plain language, and — if perceived — the current page's content, sanitized
+ * then wrapped as untrusted data, same as the Planner/Navigator/Verifier prompts. A
+ * non-browser tool's `description` (untrusted — it comes from an external MCP server or
+ * a page's own WebMCP declaration, Phase 2 #82) is sanitized through the same `sanitize`
+ * function before it ever reaches this text.
  */
 export function buildCriticPrompt(
   input: CriticCheckInput,
+  toolRegistry: ToolRegistry,
   options: BuildCriticPromptOptions = {},
 ): string {
   const sanitize = options.sanitize ?? identitySanitize;
@@ -38,8 +44,10 @@ export function buildCriticPrompt(
     `User's original task: ${input.task}`,
     `Current sub-goal: ${input.subGoal}`,
     '',
-    'Proposed action(s) about to run:',
-    ...input.actions.map((action) => `- ${describeAction(action, input.perception)}`),
+    'Proposed tool call(s) about to run:',
+    ...input.toolCalls.map(
+      (toolCall) => `- ${describeToolCall(toolCall, toolRegistry, input.perception, sanitize)}`,
+    ),
   ];
 
   const sanitizedContent =

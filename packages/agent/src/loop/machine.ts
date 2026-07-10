@@ -300,7 +300,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
         invoke: {
           src: 'policyActor',
           input: ({ context }) => ({
-            actions: context.proposedActions,
+            toolCalls: context.proposedToolCalls,
             ...(context.perception !== undefined ? { perception: context.perception } : {}),
           }),
           onDone: [
@@ -362,7 +362,7 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
           input: ({ context }) => ({
             task: context.task,
             subGoal: context.subGoal ?? context.task,
-            actions: context.proposedActions,
+            toolCalls: context.proposedToolCalls,
             perception: context.perception,
           }),
           onDone: [

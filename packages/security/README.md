@@ -55,15 +55,18 @@ decision matrix; summary:
   (banking, `.gov`/`.mil`, adult) that blocks an origin outright unless the user has
   stored an explicit `mode: "allow"` policy for that exact origin.
 - `decideForRisk` + `resolveEffectiveMode` (`policy/evaluate-policy.ts`) are the pure
-  decision core: classify the action's risk (via `@aegis/actions`' `classifyActionRisk`),
-  resolve the effective mode (stored policy, deny-list, or the `"ask"` default), then
-  decide `allow` / `confirm` / `deny`. `evaluatePolicy` composes both for one call. No
-  I/O — this is what the exhaustive risk x mode x `allowStateChanging` matrix tests
-  exercise directly.
+  decision core: resolve the effective mode (stored policy, deny-list, or the `"ask"`
+  default), then decide `allow` / `confirm` / `deny` for an already-classified `risk`.
+  `evaluatePolicy` composes both for one call. No I/O — this is what the exhaustive risk
+  x mode x `allowStateChanging` matrix tests exercise directly. This package has no
+  notion of `Action`/`Tool` shapes at all (Phase 2, #82) — the caller classifies risk
+  first (`@aegis/actions`' `ToolRegistry.classify`, which applies
+  `STATE_CHANGING_KEYWORDS` elevation for browser tools) and passes the resolved
+  `ActionRisk` in.
 - `PolicyStore` (`policy/policy-store.ts`) persists every origin's policy as one
   `Record<origin, SitePolicy>` via a `StoragePort`. `PolicyEngine`
   (`policy/policy-engine.ts`) is the thin async composition of `PolicyStore.getPolicy` +
-  `evaluatePolicy` — the `evaluate(action, origin, riskContext?)` API #21 asks for.
+  `evaluatePolicy` — `evaluate(risk, origin)`.
 
 ## Secret vault & native fill
 

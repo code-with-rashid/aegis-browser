@@ -50,26 +50,44 @@ local, structurally-identical type rather than importing `@aegis/security`'s
 `PolicyService` backed by `@aegis/security`'s policy engine is composition-root work, not
 built in `@aegis/agent`).
 
+`PolicyCheckInput.toolCalls`/`CriticCheckInput.toolCalls` (Phase 2, #82) carry _every_
+tool call the Navigator proposed this turn, from any source — not just browser actions —
+so the security policy engine and alignment critic gate a call to an MCP/WebMCP tool
+exactly as they gate a DOM click. `apps/extension/background/policy-service.ts`'s real
+`PolicyService` classifies each call's risk via `ToolRegistry.classify` (`@aegis/actions`,
+#82) — an unrecognized tool id fails safe to `state_changing` — then evaluates that risk
+against `@aegis/security`'s policy engine, which since #82 takes an already-classified
+`ActionRisk` rather than an `Action`, so it has no notion of action/tool shapes at all.
+`context.proposedActions` (the `source: "browser"` subset, still populated by the
+Navigator) is what `buildConfirmationRequest`/the trace consume below — they aren't
+tool-call-aware yet (#90).
+
 `buildConfirmationRequest`/`describeAction` (`loop/confirmation.ts`) turn the pending
 actions into a `ConfirmationRequest {actions, preview, reason?}` — one human-readable line
 per action (e.g. `Click "Submit Order"`), built by matching each action's `ref` against
 `context.perception.elements` for its real accessible name. This is what a confirmation
-UI (#27) renders instead of raw action JSON.
+UI (#27) renders instead of raw action JSON. `describeToolCall` (same file) is the
+tool-call-aware equivalent the alignment critic's prompt uses (below): a `source:
+"browser"` call delegates to `describeAction`; any other tool's `description` — untrusted,
+since it comes from an external MCP server or a page's own WebMCP declaration — is run
+through the caller's `sanitize` function first.
 
 From `confirming`: `APPROVE` clears `pendingConfirmation` and proceeds to `actingGate`;
-`REJECT` clears it and replans; `EDIT {actions}` replaces `proposedActions`, rebuilds the
-preview, and stays in `confirming` — a human can revise a proposed action without it ever
-executing unsupervised. `loop/controls.ts` exposes all three as `approveLoop`/
-`rejectLoop`/`editLoop`.
+`REJECT` clears it and replans; `EDIT {actions}` replaces `proposedActions` (and
+re-derives `proposedToolCalls` via `actionToToolCall`, keeping `acting` in sync with what
+the human sees), rebuilds the preview, and stays in `confirming` — a human can revise a
+proposed action without it ever executing unsupervised. `loop/controls.ts` exposes all
+three as `approveLoop`/`rejectLoop`/`editLoop`.
 
 ## The alignment critic
 
 `aligning` sits between `policyCheck`'s `confirm` outcome and `confirming`
-(`docs/adr/0011-alignment-critic.md`) — only actions already flagged `confirm` are
-checked; `allow` and `deny` never reach it. `createCriticService`
-(`critic/create-critic-service.ts`) builds the `CriticService` it invokes: unlike the
-Verifier, there's no mechanical heuristic for "does this serve the user's intent," so it
-always calls the model (the cheap, low-temperature `critic` role).
+(`docs/adr/0011-alignment-critic.md`) — only tool calls already flagged `confirm` are
+checked; `allow` and `deny` never reach it. `createCriticService(modelRouter, toolRegistry,
+options?)` (`critic/create-critic-service.ts`) builds the `CriticService` it invokes:
+unlike the Verifier, there's no mechanical heuristic for "does this serve the user's
+intent," so it always calls the model (the cheap, low-temperature `critic` role).
+`toolRegistry` resolves each proposed call's `Tool` metadata for the prompt.
 
 `!aligned` routes straight to `replanning` with a `MISALIGNED_ACTION` `lastError` — the
 human is never shown a confirmation preview for an action the critic thinks was induced

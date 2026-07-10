@@ -1,5 +1,10 @@
-import { classifyActionRisk, type Action } from '@aegis/actions';
-import { AgentError, type PolicyCheckOutput, type PolicyService } from '@aegis/agent';
+import type { Action, ActionRisk, ToolRegistry } from '@aegis/actions';
+import {
+  AgentError,
+  type PolicyCheckOutput,
+  type PolicyService,
+  type ToolCall,
+} from '@aegis/agent';
 import type { PerceptionPayload } from '@aegis/perception';
 import type { PolicyDecision, PolicyEngine } from '@aegis/security';
 import { err, isErr, ok } from '@aegis/shared';
@@ -10,18 +15,23 @@ const DECISION_PRIORITY: Readonly<Record<PolicyDecision, number>> = {
   allow: 0,
 };
 
-function reasonFor(decision: PolicyDecision, action: Action, origin: string): string | undefined {
+function reasonFor(
+  decision: PolicyDecision,
+  toolId: string,
+  risk: ActionRisk,
+  origin: string,
+): string | undefined {
   switch (decision) {
     case 'deny':
-      return `${origin} denies this action`;
+      return `${origin} denies this tool call`;
     case 'confirm':
-      return `${action.type} (${classifyActionRisk(action)}) on ${origin} requires confirmation`;
+      return `${toolId} (${risk}) on ${origin} requires confirmation`;
     case 'allow':
       return undefined;
   }
 }
 
-/** The ref an action targets, for the action types that have one — `undefined` for the rest. */
+/** The ref a browser action targets, for the action types that have one — `undefined` for the rest. */
 function refOf(action: Action): string | undefined {
   switch (action.type) {
     case 'click':
@@ -44,23 +54,35 @@ function refOf(action: Action): string | undefined {
 }
 
 /**
- * The accessible name of `action`'s target element, if it has one and `perception`
- * still has it listed — feeds `ActionRiskContext.elementName`, the signal that elevates
- * an ordinary interaction to `state_changing` (e.g. a button literally named "Buy Now").
+ * The accessible name of a browser tool call's target element, if it has one and
+ * `perception` still has it listed — feeds `ActionRiskContext.elementName`, the signal
+ * that elevates an ordinary interaction to `state_changing` (e.g. a button literally
+ * named "Buy Now"). Non-browser tool calls have no page element to resolve.
  */
 function elementNameFor(
-  action: Action,
+  toolCall: ToolCall,
+  tool: { readonly source: string } | undefined,
   perception: PerceptionPayload | undefined,
 ): string | undefined {
-  const ref = refOf(action);
-  if (ref === undefined || perception === undefined) {
+  if (tool?.source !== 'browser' || perception === undefined) {
+    return undefined;
+  }
+  const ref = refOf(toolCall.args as Action);
+  if (ref === undefined) {
     return undefined;
   }
   return perception.elements.find((element) => element.ref === ref)?.name;
 }
 
-/** The URL an action would navigate the browser to, for the action types that have one. */
-function destinationUrlFor(action: Action): string | undefined {
+/** The URL a browser `navigate`/`open_tab` tool call would navigate the browser to, if any. */
+function destinationUrlFor(
+  toolCall: ToolCall,
+  tool: { readonly source: string } | undefined,
+): string | undefined {
+  if (tool?.source !== 'browser') {
+    return undefined;
+  }
+  const action = toolCall.args as Action;
   switch (action.type) {
     case 'navigate':
       return action.url;
@@ -83,16 +105,22 @@ function destinationUrlFor(action: Action): string | undefined {
 }
 
 /**
- * The origin to policy-check `action` against: for `navigate`/`open_tab` (an action that
- * takes the browser somewhere new), that's the *destination*'s origin — a deny-listed
- * origin must be unreachable by navigating there, not just unreachable-to-act-on once
- * already on it, otherwise an injected "navigate to chase.com" instruction would sail
- * through a policy check that only ever inspected the page the agent started on. Every
- * other action type is checked against `currentOrigin`, since those act on the page the
- * agent is already on.
+ * The origin to policy-check a tool call against: for a browser `navigate`/`open_tab`
+ * call (one that takes the browser somewhere new), that's the *destination*'s origin — a
+ * deny-listed origin must be unreachable by navigating there, not just
+ * unreachable-to-act-on once already on it, otherwise an injected "navigate to chase.com"
+ * instruction would sail through a policy check that only ever inspected the page the
+ * agent started on. Every other tool call is checked against `currentOrigin`, since a
+ * browser tool acts on the page the agent is already on; a non-browser tool call (MCP/
+ * WebMCP, #85-#87) has no separate "destination" concept yet either, so it's checked
+ * against the current page's origin too, pending those issues' own permissioning layer.
  */
-function originToCheck(action: Action, currentOrigin: string): string {
-  const destinationUrl = destinationUrlFor(action);
+function originToCheck(
+  toolCall: ToolCall,
+  tool: { readonly source: string } | undefined,
+  currentOrigin: string,
+): string {
+  const destinationUrl = destinationUrlFor(toolCall, tool);
   if (destinationUrl === undefined) {
     return currentOrigin;
   }
@@ -104,25 +132,26 @@ function originToCheck(action: Action, currentOrigin: string): string {
 }
 
 /**
- * Adapts `@aegis/security`'s `PolicyEngine` (one action at a time, three-way
- * allow/confirm/deny) to `@aegis/agent`'s `PolicyService` port (a batch of actions,
- * `{decision, reason?}`) — the composition-root wiring both packages' ADRs (0010, 0011)
- * deferred, since `@aegis/agent` and `@aegis/security` are siblings that never import
- * each other directly. The batch's overall decision is the strictest of any single
- * action's (`deny` > `confirm` > `allow`), regardless of the order actions were proposed
- * in — a `deny` later in the list must still block the whole batch.
+ * Adapts `@aegis/security`'s `PolicyEngine` (one already-classified risk at a time,
+ * three-way allow/confirm/deny) to `@aegis/agent`'s `PolicyService` port (a batch of tool
+ * calls, `{decision, reason?}`) — the composition-root wiring both packages' ADRs (0010,
+ * 0011, 0030) deferred, since `@aegis/agent` and `@aegis/security` are siblings that
+ * never import each other directly. The batch's overall decision is the strictest of any
+ * single tool call's (`deny` > `confirm` > `allow`), regardless of the order they were
+ * proposed in — a `deny` later in the list must still block the whole batch.
  *
- * `getOrigin` is resolved fresh on every check (not cached) since a `navigate` action
- * earlier in the same run can change the page's origin mid-task. Each action's target
- * element name (from `input.perception`, when present) is resolved into an
- * `ActionRiskContext` and passed to `engine.evaluate` — without this, the policy
- * engine's `STATE_CHANGING_KEYWORDS` risk elevation could never actually trigger. A
- * `navigate`/`open_tab` action is checked against its *destination* origin, not the
- * current page's — see {@link originToCheck}.
+ * Every tool call — from any source, not just `browser` — is routed through the same
+ * policy engine (Phase 2, #82): `toolRegistry.classify` resolves each call's risk (fail
+ * safe to `state_changing` for an unrecognized tool id), and a browser call's target
+ * element name (from `input.perception`, when present) feeds that classification's
+ * `STATE_CHANGING_KEYWORDS` elevation exactly as before. `getOrigin` is resolved fresh on
+ * every check (not cached) since a `navigate` tool call earlier in the same run can
+ * change the page's origin mid-task.
  */
 export function createPolicyService(
   engine: PolicyEngine,
   getOrigin: () => Promise<string>,
+  toolRegistry: ToolRegistry,
 ): PolicyService {
   return async (input) => {
     let currentOrigin: string;
@@ -136,19 +165,22 @@ export function createPolicyService(
       );
     }
 
-    let strictest: { decision: PolicyDecision; action: Action; checkedOrigin: string } | undefined;
+    let strictest:
+      | { decision: PolicyDecision; toolCall: ToolCall; risk: ActionRisk; checkedOrigin: string }
+      | undefined;
 
-    for (const action of input.actions) {
-      const elementName = elementNameFor(action, input.perception);
-      const checkedOrigin = originToCheck(action, currentOrigin);
-      const result = await engine.evaluate(
-        action,
-        checkedOrigin,
+    for (const toolCall of input.toolCalls) {
+      const tool = toolRegistry.get(toolCall.toolId);
+      const elementName = elementNameFor(toolCall, tool, input.perception);
+      const risk = toolRegistry.classify(
+        toolCall.toolId,
         elementName !== undefined ? { elementName } : undefined,
       );
+      const checkedOrigin = originToCheck(toolCall, tool, currentOrigin);
+      const result = await engine.evaluate(risk, checkedOrigin);
       if (isErr(result)) {
         return err(
-          new AgentError('POLICY_CHECK_FAILED', 'Policy engine failed to evaluate an action', {
+          new AgentError('POLICY_CHECK_FAILED', 'Policy engine failed to evaluate a tool call', {
             cause: result.error,
           }),
         );
@@ -158,7 +190,7 @@ export function createPolicyService(
         strictest === undefined ||
         DECISION_PRIORITY[result.value] > DECISION_PRIORITY[strictest.decision]
       ) {
-        strictest = { decision: result.value, action, checkedOrigin };
+        strictest = { decision: result.value, toolCall, risk, checkedOrigin };
       }
     }
 
@@ -167,7 +199,12 @@ export function createPolicyService(
       return ok(output);
     }
 
-    const reason = reasonFor(strictest.decision, strictest.action, strictest.checkedOrigin);
+    const reason = reasonFor(
+      strictest.decision,
+      strictest.toolCall.toolId,
+      strictest.risk,
+      strictest.checkedOrigin,
+    );
     const output: PolicyCheckOutput = {
       decision: strictest.decision,
       ...(reason !== undefined ? { reason } : {}),

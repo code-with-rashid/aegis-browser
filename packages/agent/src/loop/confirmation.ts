@@ -1,6 +1,9 @@
-import type { Action } from '@aegis/actions';
+import type { Action, ToolRegistry } from '@aegis/actions';
 import type { PerceptionPayload } from '@aegis/perception';
 import type { ElementRef } from '@aegis/shared';
+
+import { identitySanitize, type SanitizeText } from '../sanitize';
+import type { ToolCall } from './services';
 
 /**
  * A state-changing action (or set of actions) awaiting human approval, plus a
@@ -67,6 +70,26 @@ export function describeAction(action: Action, perception: PerceptionPayload | u
     default:
       return assertNever(action);
   }
+}
+
+/**
+ * Describes one tool call in plain language, for the alignment critic's prompt (#82) —
+ * a `source: "browser"` tool call delegates to {@link describeAction} exactly as before;
+ * any other tool's `description` is untrusted (it comes from an external MCP server or a
+ * page's own WebMCP declaration) and is run through `sanitize` before it's ever included.
+ */
+export function describeToolCall(
+  toolCall: ToolCall,
+  toolRegistry: ToolRegistry,
+  perception: PerceptionPayload | undefined,
+  sanitize: SanitizeText = identitySanitize,
+): string {
+  const tool = toolRegistry.get(toolCall.toolId);
+  if (tool?.source === 'browser') {
+    return describeAction(toolCall.args as Action, perception);
+  }
+  const description = tool !== undefined ? sanitize(tool.description) : '(unregistered tool)';
+  return `Call tool "${toolCall.toolId}" (${description})`;
 }
 
 /** Builds the {@link ConfirmationRequest} the loop machine surfaces while in `confirming`. */

@@ -1,5 +1,4 @@
-import type { Action, ActionRisk, ActionRiskContext } from '@aegis/actions';
-import { classifyActionRisk } from '@aegis/actions';
+import type { ActionRisk } from '@aegis/actions';
 
 import { isDenyListedOrigin } from './deny-list';
 import { isPolicyExpired, type PolicyMode, type SitePolicy } from './site-policy';
@@ -8,12 +7,16 @@ import { isPolicyExpired, type PolicyMode, type SitePolicy } from './site-policy
 export type PolicyDecision = 'allow' | 'confirm' | 'deny';
 
 export interface EvaluatePolicyInput {
-  readonly action: Action;
+  /**
+   * The risk of the tool call being gated, already classified by the caller (e.g.
+   * `@aegis/actions`' `ToolRegistry.classify`, which applies `STATE_CHANGING_KEYWORDS`
+   * elevation for browser tools) — this package has no notion of `Action`/`Tool` shapes,
+   * only the risk scale itself.
+   */
+  readonly risk: ActionRisk;
   readonly origin: string;
   /** The stored policy for `origin`, if any (`undefined` means "not yet configured"). */
   readonly policy?: SitePolicy;
-  /** Extra risk-classification context (e.g. the target element's accessible name). */
-  readonly riskContext?: ActionRiskContext;
   /** Epoch ms "now", for `expiresAt` comparison. Defaults to `Date.now()`. */
   readonly now?: number;
   /** Overrides the built-in deny-list, for testing. */
@@ -72,13 +75,12 @@ export function decideForRisk(
 }
 
 /**
- * Pure policy evaluation: classifies `action`'s risk, resolves the effective mode for
- * `origin`, and decides `allow` / `confirm` / `deny`. No I/O — see `policy-store.ts` for
- * the persisted-policy lookup this is meant to be composed with.
+ * Pure policy evaluation: resolves the effective mode for `origin` and decides `allow` /
+ * `confirm` / `deny` for the given, already-classified `risk`. No I/O — see
+ * `policy-store.ts` for the persisted-policy lookup this is meant to be composed with.
  */
 export function evaluatePolicy(input: EvaluatePolicyInput): PolicyDecision {
   const now = input.now ?? Date.now();
-  const risk = classifyActionRisk(input.action, input.riskContext);
   const mode = resolveEffectiveMode(input.origin, input.policy, now, input.denyList);
-  return decideForRisk(risk, mode, input.policy?.allowStateChanging ?? false);
+  return decideForRisk(input.risk, mode, input.policy?.allowStateChanging ?? false);
 }

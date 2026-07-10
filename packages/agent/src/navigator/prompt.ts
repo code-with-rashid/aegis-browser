@@ -46,12 +46,17 @@ function formatElement(element: DecideInput['perception']['elements'][number]): 
  * `.transform()` (`@aegis/actions`' `ElementRefSchema`), which JSON Schema can't
  * represent — it comes through as an unconstrained `{}` there, which is fine: the
  * "Available elements" list already tells the model exactly what a ref looks like.
+ *
+ * `tool.description` is untrusted for any non-`"browser"` source (#82) — it comes from an
+ * external MCP server or a page's own WebMCP declaration, either of which could embed an
+ * injected instruction — so it's run through `sanitize` exactly like page content, before
+ * it's ever included here.
  */
-function formatTool(tool: Tool): string {
+function formatTool(tool: Tool, sanitize: SanitizeText): string {
   const schema = JSON.stringify(
     z.toJSONSchema(tool.inputSchema, { target: 'draft-7', unrepresentable: 'any' }),
   );
-  return `- id="${tool.id}" — ${tool.description} args schema: ${schema}`;
+  return `- id="${tool.id}" — ${sanitize(tool.description)} args schema: ${schema}`;
 }
 
 export interface BuildNavigatorPromptOptions {
@@ -74,7 +79,7 @@ export function buildNavigatorPrompt(
   const lines: string[] = [`Overall task: ${input.task}`, `Sub-goal: ${input.subGoal}`, ''];
 
   const tools = options.tools ?? [];
-  const toolList = tools.map(formatTool).join('\n');
+  const toolList = tools.map((tool) => formatTool(tool, sanitize)).join('\n');
   lines.push('Available tools:', toolList || '(none)');
 
   const elementList = input.perception.elements.map(formatElement).join('\n');

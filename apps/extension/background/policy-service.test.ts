@@ -1,4 +1,5 @@
-import { AgentError } from '@aegis/agent';
+import { AgentError, type ToolCall } from '@aegis/agent';
+import { createDefaultToolRegistry } from '@aegis/actions';
 import type { PerceptionPayload } from '@aegis/perception';
 import {
   createPolicyEngine,
@@ -8,11 +9,15 @@ import {
 } from '@aegis/security';
 import { createMemoryStorage, err, ok, StorageError, toElementRef } from '@aegis/shared';
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { createPolicyService } from './policy-service';
 
-const click = { type: 'click' as const, ref: toElementRef('e1') };
-const goBack = { type: 'go_back' as const };
+const clickCall: ToolCall = {
+  toolId: 'browser.click',
+  args: { type: 'click', ref: toElementRef('e1') },
+};
+const goBackCall: ToolCall = { toolId: 'browser.go_back', args: { type: 'go_back' } };
 
 function perceptionWithElement(name: string): PerceptionPayload {
   return {
@@ -34,39 +39,44 @@ function originOf(url: string) {
   return () => Promise.resolve(url);
 }
 
+const registry = createDefaultToolRegistry();
+
 describe('createPolicyService', () => {
-  it('allows a batch when every action is allowed', async () => {
+  it('allows a batch when every tool call is allowed', async () => {
     const checkPolicy = createPolicyService(
       fakeEngine(() => 'allow'),
       originOf('https://example.com'),
+      registry,
     );
 
-    const result = await checkPolicy({ actions: [click, goBack] });
+    const result = await checkPolicy({ toolCalls: [clickCall, goBackCall] });
 
     expect(result).toEqual({ ok: true, value: { decision: 'allow' } });
   });
 
-  it('confirms when any single action needs confirmation', async () => {
+  it('confirms when any single tool call needs confirmation', async () => {
     const checkPolicy = createPolicyService(
       fakeEngine(() => 'confirm'),
       originOf('https://example.com'),
+      registry,
     );
 
-    const result = await checkPolicy({ actions: [click] });
+    const result = await checkPolicy({ toolCalls: [clickCall] });
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.decision).toBe('confirm');
     expect(result.ok && result.value.reason).toContain('example.com');
   });
 
-  it('denies the whole batch when any action is denied, even if it comes after a confirm', async () => {
+  it('denies the whole batch when any tool call is denied, even if it comes after a confirm', async () => {
     const decisions: PolicyDecision[] = ['confirm', 'deny'];
     const checkPolicy = createPolicyService(
       fakeEngine((index) => decisions[index] ?? 'allow'),
       originOf('https://www.chase.com'),
+      registry,
     );
 
-    const result = await checkPolicy({ actions: [click, goBack] });
+    const result = await checkPolicy({ toolCalls: [clickCall, goBackCall] });
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.decision).toBe('deny');
@@ -77,9 +87,10 @@ describe('createPolicyService', () => {
     const checkPolicy = createPolicyService(
       fakeEngine((index) => decisions[index] ?? 'allow'),
       originOf('https://www.chase.com'),
+      registry,
     );
 
-    const result = await checkPolicy({ actions: [click, goBack] });
+    const result = await checkPolicy({ toolCalls: [clickCall, goBackCall] });
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.decision).toBe('deny');
@@ -89,9 +100,9 @@ describe('createPolicyService', () => {
     const engine: PolicyEngine = {
       evaluate: () => Promise.resolve(err(new StorageError('STORAGE_READ_FAILED', 'boom'))),
     };
-    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'), registry);
 
-    const result = await checkPolicy({ actions: [click] });
+    const result = await checkPolicy({ toolCalls: [clickCall] });
 
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error).toBeInstanceOf(AgentError);
@@ -104,57 +115,68 @@ describe('createPolicyService', () => {
       () => {
         throw new Error('no active tab');
       },
+      registry,
     );
 
-    const result = await checkPolicy({ actions: [click] });
+    const result = await checkPolicy({ toolCalls: [clickCall] });
 
     expect(!result.ok && result.error.code).toBe('POLICY_CHECK_FAILED');
   });
 
   it('integrates with a real PolicyEngine: a deny-listed origin denies by default', async () => {
     const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
-    const checkPolicy = createPolicyService(engine, originOf('https://www.chase.com'));
+    const checkPolicy = createPolicyService(engine, originOf('https://www.chase.com'), registry);
 
-    const result = await checkPolicy({ actions: [goBack] });
+    const result = await checkPolicy({ toolCalls: [goBackCall] });
 
     expect(result).toEqual({
       ok: true,
-      value: { decision: 'deny', reason: 'https://www.chase.com denies this action' },
+      value: { decision: 'deny', reason: 'https://www.chase.com denies this tool call' },
     });
   });
 
-  it('integrates with a real PolicyEngine: an ordinary origin with no configured policy allows a read action', async () => {
+  it('integrates with a real PolicyEngine: an ordinary origin with no configured policy allows a read tool call', async () => {
     const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
-    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'), registry);
 
-    const result = await checkPolicy({ actions: [goBack] });
+    const result = await checkPolicy({ toolCalls: [goBackCall] });
 
     expect(result).toEqual({ ok: true, value: { decision: 'allow' } });
   });
 
-  it('passes the target element accessible name from perception as riskContext', async () => {
+  it('passes the target element accessible name from perception as risk-elevation context', async () => {
     const evaluate = vi.fn().mockResolvedValue(ok('allow'));
-    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+    const checkPolicy = createPolicyService(
+      { evaluate },
+      originOf('https://example.com'),
+      registry,
+    );
 
-    await checkPolicy({ actions: [click], perception: perceptionWithElement('Buy Now') });
+    await checkPolicy({ toolCalls: [clickCall], perception: perceptionWithElement('Buy Now') });
 
-    expect(evaluate).toHaveBeenCalledWith(click, 'https://example.com', {
-      elementName: 'Buy Now',
-    });
+    expect(evaluate).toHaveBeenCalledWith('state_changing', 'https://example.com');
   });
 
-  it('passes no riskContext when no perception is given', async () => {
+  it('classifies at base risk when no perception is given', async () => {
     const evaluate = vi.fn().mockResolvedValue(ok('allow'));
-    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+    const checkPolicy = createPolicyService(
+      { evaluate },
+      originOf('https://example.com'),
+      registry,
+    );
 
-    await checkPolicy({ actions: [click] });
+    await checkPolicy({ toolCalls: [clickCall] });
 
-    expect(evaluate).toHaveBeenCalledWith(click, 'https://example.com', undefined);
+    expect(evaluate).toHaveBeenCalledWith('input', 'https://example.com');
   });
 
-  it('passes no riskContext when perception has no element matching the ref', async () => {
+  it('classifies at base risk when perception has no element matching the ref', async () => {
     const evaluate = vi.fn().mockResolvedValue(ok('allow'));
-    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+    const checkPolicy = createPolicyService(
+      { evaluate },
+      originOf('https://example.com'),
+      registry,
+    );
     const perception: PerceptionPayload = {
       elements: [],
       content: { text: '', truncated: false },
@@ -162,17 +184,17 @@ describe('createPolicyService', () => {
       truncated: false,
     };
 
-    await checkPolicy({ actions: [click], perception });
+    await checkPolicy({ toolCalls: [clickCall], perception });
 
-    expect(evaluate).toHaveBeenCalledWith(click, 'https://example.com', undefined);
+    expect(evaluate).toHaveBeenCalledWith('input', 'https://example.com');
   });
 
   it('integrates with a real PolicyEngine: a click on a button named "Buy Now" requires confirmation', async () => {
     const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
-    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'), registry);
 
     const result = await checkPolicy({
-      actions: [click],
+      toolCalls: [clickCall],
       perception: perceptionWithElement('Buy Now'),
     });
 
@@ -182,68 +204,125 @@ describe('createPolicyService', () => {
 
   it('integrates with a real PolicyEngine: the same click on a button named "Details" is allowed', async () => {
     const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
-    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'), registry);
 
     const result = await checkPolicy({
-      actions: [click],
+      toolCalls: [clickCall],
       perception: perceptionWithElement('Details'),
     });
 
     expect(result).toEqual({ ok: true, value: { decision: 'allow' } });
   });
 
-  it('checks a navigate action against its destination origin, not the current page', async () => {
+  it('checks a navigate tool call against its destination origin, not the current page', async () => {
     const evaluate = vi.fn().mockResolvedValue(ok('allow'));
-    const navigate = { type: 'navigate' as const, url: 'https://www.chase.com/login' };
-    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+    const navigateCall: ToolCall = {
+      toolId: 'browser.navigate',
+      args: { type: 'navigate', url: 'https://www.chase.com/login' },
+    };
+    const checkPolicy = createPolicyService(
+      { evaluate },
+      originOf('https://example.com'),
+      registry,
+    );
 
-    await checkPolicy({ actions: [navigate] });
+    await checkPolicy({ toolCalls: [navigateCall] });
 
-    expect(evaluate).toHaveBeenCalledWith(navigate, 'https://www.chase.com', undefined);
+    expect(evaluate).toHaveBeenCalledWith('navigate', 'https://www.chase.com');
   });
 
   it('integrates with a real PolicyEngine: navigating to a deny-listed destination is denied, even from a safe origin', async () => {
     const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
-    const navigate = { type: 'navigate' as const, url: 'https://www.chase.com/login' };
-    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+    const navigateCall: ToolCall = {
+      toolId: 'browser.navigate',
+      args: { type: 'navigate', url: 'https://www.chase.com/login' },
+    };
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'), registry);
 
-    const result = await checkPolicy({ actions: [navigate] });
+    const result = await checkPolicy({ toolCalls: [navigateCall] });
 
     expect(result).toEqual({
       ok: true,
-      value: { decision: 'deny', reason: 'https://www.chase.com denies this action' },
+      value: { decision: 'deny', reason: 'https://www.chase.com denies this tool call' },
     });
   });
 
   it('integrates with a real PolicyEngine: opening a new tab at a deny-listed URL is denied', async () => {
     const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
-    const openTab = { type: 'open_tab' as const, url: 'https://www.chase.com/login' };
-    const checkPolicy = createPolicyService(engine, originOf('https://example.com'));
+    const openTabCall: ToolCall = {
+      toolId: 'browser.open_tab',
+      args: { type: 'open_tab', url: 'https://www.chase.com/login' },
+    };
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'), registry);
 
-    const result = await checkPolicy({ actions: [openTab] });
+    const result = await checkPolicy({ toolCalls: [openTabCall] });
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.decision).toBe('deny');
   });
 
-  it('checks a click action against the current origin, unaffected by the navigate-destination logic', async () => {
+  it('checks a click tool call against the current origin, unaffected by the navigate-destination logic', async () => {
     const evaluate = vi.fn().mockResolvedValue(ok('allow'));
-    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+    const checkPolicy = createPolicyService(
+      { evaluate },
+      originOf('https://example.com'),
+      registry,
+    );
 
-    await checkPolicy({ actions: [click] });
+    await checkPolicy({ toolCalls: [clickCall] });
 
-    expect(evaluate).toHaveBeenCalledWith(click, 'https://example.com', undefined);
+    expect(evaluate).toHaveBeenCalledWith('input', 'https://example.com');
   });
 
-  it('falls back to the current origin for a navigate action with an unparseable URL', async () => {
+  it('falls back to the current origin for a navigate tool call with an unparseable URL', async () => {
     // NavigateActionSchema already requires a valid URL, but the fallback must still be
     // safe (deny nothing spuriously) if one somehow arrives malformed.
     const evaluate = vi.fn().mockResolvedValue(ok('allow'));
-    const navigate = { type: 'navigate' as const, url: 'not-a-valid-url' };
-    const checkPolicy = createPolicyService({ evaluate }, originOf('https://example.com'));
+    const navigateCall: ToolCall = {
+      toolId: 'browser.navigate',
+      args: { type: 'navigate', url: 'not-a-valid-url' },
+    };
+    const checkPolicy = createPolicyService(
+      { evaluate },
+      originOf('https://example.com'),
+      registry,
+    );
 
-    await checkPolicy({ actions: [navigate] });
+    await checkPolicy({ toolCalls: [navigateCall] });
 
-    expect(evaluate).toHaveBeenCalledWith(navigate, 'https://example.com', undefined);
+    expect(evaluate).toHaveBeenCalledWith('navigate', 'https://example.com');
+  });
+
+  it('routes a non-browser state-changing tool call through confirmation (mock MCP tool)', async () => {
+    const stateChangingRegistry = createDefaultToolRegistry();
+    stateChangingRegistry.register({
+      id: 'mcp.email.send',
+      source: 'mcp',
+      description: 'Send an email.',
+      inputSchema: z.object({}),
+      risk: 'state_changing',
+      execute: () => Promise.resolve(ok(undefined)),
+    });
+    const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
+    const checkPolicy = createPolicyService(
+      engine,
+      originOf('https://example.com'),
+      stateChangingRegistry,
+    );
+
+    const result = await checkPolicy({ toolCalls: [{ toolId: 'mcp.email.send', args: {} }] });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.decision).toBe('confirm');
+  });
+
+  it('fails safe to state_changing (confirm/deny) for an unregistered tool id', async () => {
+    const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
+    const checkPolicy = createPolicyService(engine, originOf('https://example.com'), registry);
+
+    const result = await checkPolicy({ toolCalls: [{ toolId: 'mcp.unknown.tool', args: {} }] });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.decision).toBe('confirm');
   });
 });

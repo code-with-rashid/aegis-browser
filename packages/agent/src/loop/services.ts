@@ -101,8 +101,9 @@ export function actionToToolCall(action: Action): ToolCall {
 }
 
 export interface PolicyCheckInput {
-  readonly actions: readonly Action[];
-  /** The perception the actions were proposed against — lets the policy service resolve each action's target element name for risk elevation (e.g. a button literally named "Buy Now"). Optional so existing callers/tests that don't need it can omit it entirely. */
+  /** Every tool call this turn, from any source — routed through the security policy engine regardless of where the tool came from (Phase 2, #82). */
+  readonly toolCalls: readonly ToolCall[];
+  /** The perception the tool calls were proposed against — lets the policy service resolve a browser tool call's target element name for risk elevation (e.g. a button literally named "Buy Now"). Optional so existing callers/tests that don't need it can omit it entirely. */
   readonly perception?: PerceptionPayload;
 }
 /**
@@ -125,7 +126,8 @@ export interface CriticCheckInput {
   /** The user's original, trusted task — what alignment is judged against. */
   readonly task: string;
   readonly subGoal: string;
-  readonly actions: readonly Action[];
+  /** Every tool call the policy engine flagged `confirm` — from any source (Phase 2, #82). */
+  readonly toolCalls: readonly ToolCall[];
   readonly perception: PerceptionPayload | undefined;
 }
 export interface CriticCheckOutput {

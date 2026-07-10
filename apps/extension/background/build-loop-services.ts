@@ -19,7 +19,7 @@ import {
   type CdpError,
   type CdpSession,
 } from '@aegis/perception';
-import { createPolicyEngine, createPolicyStore } from '@aegis/security';
+import { createPolicyEngine, createPolicyStore, sanitizePageContent } from '@aegis/security';
 import { err, isErr, ok, type Result, type StoragePort } from '@aegis/shared';
 
 import { createPolicyService } from './policy-service';
@@ -84,16 +84,18 @@ export async function buildLoopServices(
   const actionRunner = createActionRunner();
   const toolRegistry = createDefaultToolRegistry();
   const policyEngine = createPolicyEngine(createPolicyStore(storage));
-  const checkPolicy = createPolicyService(policyEngine, () => resolveOrigin(tabId));
+  const checkPolicy = createPolicyService(policyEngine, () => resolveOrigin(tabId), toolRegistry);
 
   const services: LoopServices = {
     perceive: (input) => getPerceptionPayload(input.session, { goal: input.goal }),
-    plan: createPlannerService(modelRouter),
-    decide: createNavigatorService(modelRouter, toolRegistry),
+    plan: createPlannerService(modelRouter, { sanitize: sanitizePageContent }),
+    decide: createNavigatorService(modelRouter, toolRegistry, { sanitize: sanitizePageContent }),
     checkPolicy,
-    checkAlignment: createCriticService(modelRouter),
+    checkAlignment: createCriticService(modelRouter, toolRegistry, {
+      sanitize: sanitizePageContent,
+    }),
     act: createToolCallActService(actionRunner, toolRegistry),
-    verify: createVerifierService(modelRouter),
+    verify: createVerifierService(modelRouter, { sanitize: sanitizePageContent }),
   };
 
   return ok({

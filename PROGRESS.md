@@ -71,7 +71,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #80 P2-1 Unified `Tool` + `ToolRegistry` — blocked by: none
 - [x] #81 P2-2 Tool-calling in the agent loop — blocked by: #80
-- [ ] #82 P2-3 Tool risk gating — blocked by: #81
+- [x] #82 P2-3 Tool risk gating — blocked by: #81
 
 ### M9 — MCP client
 
@@ -267,6 +267,15 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   longer needed now that the Navigator's wire schema is generic `{toolId, args:
 z.unknown()}`, with per-tool schemas rendered as prompt text instead
   (`unrepresentable: 'any'`).
+- [0030](docs/adr/0030-tool-risk-gating.md) — Tool risk gating (Phase 2, issue #82):
+  `@aegis/security`'s policy engine no longer knows about `Action` at all —
+  `PolicyEngine.evaluate(risk, origin)` takes an already-classified `ActionRisk`, resolved
+  by the new `ToolRegistry.classify` (fail-safe `state_changing` for an unknown tool id).
+  `PolicyCheckInput`/`CriticCheckInput` carry every tool call from any source;
+  `buildCriticPrompt`/the Navigator's tool listing sanitize a non-browser tool's
+  `description` as untrusted content. Also wired `@aegis/security`'s real
+  `sanitizePageContent` into the composition root, replacing a pre-existing
+  `identitySanitize` no-op that had shipped since Phase 1.
 
 ## Notes
 
@@ -290,3 +299,8 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
 - #80 (unified `Tool`/`ToolRegistry`) merged 2026-07-10 — see ADR 0028.
 - #81 (tool-calling in the agent loop) merged 2026-07-10 — see ADR 0029. Supersedes
   ADR 0006 (`navigator/llm-action-schema.ts` deleted).
+- #82 (tool risk gating) merged 2026-07-10 — see ADR 0030. Also fixed a pre-existing
+  gap discovered while implementing it: the real content sanitizer (`sanitizePageContent`,
+  built in #20) was never wired into the composition root — every agent used the
+  `identitySanitize` no-op placeholder in production. Now wired for Planner/Navigator/
+  Verifier/Critic.
