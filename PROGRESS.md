@@ -67,6 +67,35 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #34 Security test suite — blocked by: #20, #22, #23, #32
 - [x] #35 Cross-browser build, docs & v0.1.0 — blocked by: all prior issues
 
+### M8 — Tool abstraction
+
+- [ ] #80 P2-1 Unified `Tool` + `ToolRegistry` — blocked by: none
+- [ ] #81 P2-2 Tool-calling in the agent loop — blocked by: #80
+- [ ] #82 P2-3 Tool risk gating — blocked by: #81
+
+### M9 — MCP client
+
+- [ ] #83 P2-4 MCP client (Streamable HTTP) — blocked by: none
+- [ ] #84 P2-5 MCP server configuration + storage — blocked by: #83
+- [ ] #85 P2-6 MCP tools → ToolRegistry — blocked by: #84, #81, #82
+- [ ] #86 P2-7 MCP permissioning — blocked by: #85
+
+### M10 — WebMCP fast-path
+
+- [ ] #87 P2-8 WebMCP detection + adapter — blocked by: #80
+- [ ] #88 P2-9 WebMCP preferred-action routing — blocked by: #87, #82
+
+### M11 — UX & governance
+
+- [ ] #89 P2-10 Tools & MCP management UI — blocked by: #86, #87
+- [ ] #90 P2-11 Trace + confirmation for tool calls — blocked by: #82
+
+### M12 — Integration & release
+
+- [ ] #91 P2-12 E2E: MCP + WebMCP tasks — blocked by: #88, #90
+- [ ] #92 P2-13 Tool-use evals + security suite — blocked by: #91
+- [ ] #93 P2-14 Docs + v0.2 — blocked by: #92
+
 ## ADR log
 
 - [0001](docs/adr/0001-ollama-via-openai-compatible.md) — Ollama support implemented as a
@@ -238,3 +267,6 @@ Repo: https://github.com/code-with-rashid/aegis-browser
   follow-up live-model eval re-runs after #75 — see ADR 0027.
 - v0.1.1 (2026-07-10): patch release bundling the four post-release reliability fixes
   above (#71, #73, #75, #77). See `CHANGELOG.md` and the `v0.1.1` tag.
+- Phase 2 (tool-use: MCP + WebMCP) kicked off 2026-07-10 per `PHASE_2_PROMPT.md`.
+  Milestones M8–M12 and issues #80–#93 created (backlog P2-1…P2-14 map 1:1 to
+  #80…#93 in listed order). Work proceeds via the same per-issue loop as Phase 1.
