@@ -1,8 +1,9 @@
 # @aegis/mcp
 
 An `McpClient` for connecting to external MCP (Model Context Protocol) servers and
-calling their tools, plus a WebMCP page-tool adapter (#87, not yet built). Not wired into
-`@aegis/agent`'s `ToolRegistry` yet — that's #85.
+calling their tools, user-facing server configuration + storage, plus a WebMCP page-tool
+adapter (#87, not yet built). Not wired into `@aegis/agent`'s `ToolRegistry` yet — that's
+#85.
 
 ## Transport: Streamable HTTP only
 
@@ -77,5 +78,35 @@ const server = await startMockMcpServer([
 // server.requestHeaders -> every request's headers, oldest first, for asserting auth was sent
 await server.close();
 ```
+
+## Server configuration + storage (`config/`)
+
+`McpServerConnectionConfig` (`config/mcp-server-config.ts`) is what a user configures per
+MCP server: `url` (the natural, unique key — mirroring how `@aegis/security`'s
+`SitePolicy` is keyed by origin), a display `name`, `enabled`, and `authHeaders` — a list
+of `{name, secretName}` pairs. **The header's real value is never stored** — only
+`secretName`, a reference into the secret vault, resolved at call time only, the same
+vault-plus-name-reference discipline `@aegis/security` already applies to `input_text`/
+`send_keys` (`docs/adr/0012-secret-vault.md`).
+
+`createMcpServerStore(storage: StoragePort)` (`config/mcp-server-store.ts`) persists every
+server config in one `Record<url, McpServerConnectionConfig>` — `getServer`/`saveServer`
+(upsert — covers both "add" and "edit")/`removeServer`/`listServers` — the exact shape
+`@aegis/security`'s `PolicyStore` uses for per-origin policies.
+
+`@aegis/mcp` never imports `@aegis/security` directly (packages under `packages/` stay
+siblings — see ADR 0010's precedent). Resolving a `secretName` to a real value is a
+plain injected function, `SecretResolver` (`config/resolve-headers.ts`):
+
+```ts
+const resolveSecret: SecretResolver = (name) => vault.getSecret(name); // wired at the composition root
+const headers = await resolveAuthHeaders(config.authHeaders, resolveSecret);
+```
+
+`testMcpServerConnection(config, resolveSecret, options?)` (`config/test-connection.ts`)
+is the connection test the acceptance criteria asks for: resolves headers, connects,
+lists tools, and always disconnects — the same three steps a real `ToolRegistry` wiring
+(#85) will perform, so a passing test genuinely predicts the server will work once
+enabled.
 
 Depends on `@aegis/shared`, `@modelcontextprotocol/sdk`, `zod`.
