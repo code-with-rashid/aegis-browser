@@ -44,11 +44,10 @@ it.
 
 `ToolRegistry` (`registry.ts`) is a runtime `id -> Tool` map — `register()`/`unregister()`,
 `get()`/`has()`, `list({source?, risk?})` to filter, and `call(id, args, ctx)` to validate
-
-- execute in one step. An unknown `id` or schema-invalid `args` come back as a typed
-  `ToolExecutionError` (`TOOL_UNKNOWN` / `TOOL_INVALID_ARGS`) rather than throwing, so a
-  hallucinated tool call from the model degrades to a normal error the agent loop can replan
-  from.
+then execute in one step. An unknown `id` or schema-invalid `args` come back as a typed
+`ToolExecutionError` (`TOOL_UNKNOWN` / `TOOL_INVALID_ARGS`) rather than throwing, so a
+hallucinated tool call from the model degrades to a normal error the agent loop can replan
+from.
 
 `createBrowserTools()` / `createDefaultToolRegistry()` (`browser-tools.ts`) build one `Tool`
 per built-in action (`browser.<type>`), each wrapping `executeAction` unchanged — risk
