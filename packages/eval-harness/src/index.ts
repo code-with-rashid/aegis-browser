@@ -75,3 +75,19 @@ export {
   MCP_TOOL_CONFIRMATION_TOOL_ID,
   createMcpToolConfirmationResponder,
 } from './scenarios/mcp-tool-confirmation';
+export {
+  HOSTILE_TOOL_DESCRIPTION_TASK,
+  HOSTILE_TOOL_DESCRIPTION_FIXTURE,
+  HOSTILE_TOOL_DESCRIPTION_EXPECTED_SUMMARY,
+  createHostileToolDescriptionResponder,
+} from './scenarios/hostile-tool-description';
+export {
+  HOSTILE_WEBMCP_CONFIRMATION_TASK,
+  HOSTILE_WEBMCP_CONFIRMATION_EXPECTED_SUMMARY,
+  createHostileWebMcpToolConfirmationResponder,
+} from './scenarios/hostile-webmcp-tool-confirmation';
+export {
+  HOSTILE_MCP_TOOL_TASK,
+  HOSTILE_MCP_TOOL_ID,
+  createHostileMcpToolConfirmationResponder,
+} from './scenarios/hostile-mcp-tool-confirmation';

@@ -162,6 +162,9 @@ importers:
       '@aegis/llm':
         specifier: workspace:*
         version: link:../packages/llm
+      '@aegis/mcp':
+        specifier: workspace:*
+        version: link:../packages/mcp
       playwright:
         specifier: ^1.61.1
         version: 1.61.1

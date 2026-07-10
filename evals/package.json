@@ -12,6 +12,7 @@
   "dependencies": {
     "@aegis/eval-harness": "workspace:*",
     "@aegis/llm": "workspace:*",
+    "@aegis/mcp": "workspace:*",
     "playwright": "^1.61.1"
   },
   "devDependencies": {
