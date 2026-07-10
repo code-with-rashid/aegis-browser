@@ -179,13 +179,18 @@ describe('createMcpClient', () => {
       {
         name: 'slow',
         handler: async () => {
-          await new Promise((resolve) => setTimeout(resolve, 200));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
           return textResult('eventually');
         },
       },
     ]);
-    const client = createMcpClient({ url: server.url }, { timeoutMs: 20 });
-    await client.connect();
+    // A wide margin above the connect handshake's own latency (a loopback round-trip,
+    // normally single-digit ms, but can spike under CI load) and well below the tool
+    // handler's artificial delay — a tight timeout here previously made connect() itself
+    // time out under load, failing with a confusing MCP_NOT_CONNECTED instead.
+    const client = createMcpClient({ url: server.url }, { timeoutMs: 300 });
+    const connectResult = await client.connect();
+    expect(isOk(connectResult)).toBe(true);
 
     const result = await client.callTool('slow', {});
 
