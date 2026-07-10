@@ -75,7 +75,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M9 — MCP client
 
-- [ ] #83 P2-4 MCP client (Streamable HTTP) — blocked by: none
+- [x] #83 P2-4 MCP client (Streamable HTTP) — blocked by: none
 - [ ] #84 P2-5 MCP server configuration + storage — blocked by: #83
 - [ ] #85 P2-6 MCP tools → ToolRegistry — blocked by: #84, #81, #82
 - [ ] #86 P2-7 MCP permissioning — blocked by: #85
@@ -276,6 +276,14 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   `description` as untrusted content. Also wired `@aegis/security`'s real
   `sanitizePageContent` into the composition root, replacing a pre-existing
   `identitySanitize` no-op that had shipped since Phase 1.
+- [0031](docs/adr/0031-mcp-client-streamable-http.md) — MCP client over Streamable HTTP
+  (Phase 2, issue #83): `createMcpClient` wraps `@modelcontextprotocol/sdk`'s `Client` +
+  `StreamableHTTPClientTransport` (no stdio — a browser extension can't spawn child
+  processes); a genuine timeout and the caller's own `AbortSignal` firing share the
+  identical SDK error code, distinguished only by message text. `MockMcpServer` is a
+  real local HTTP server (the SDK's `McpServer` + `StreamableHTTPServerTransport` bound
+  to an ephemeral `127.0.0.1` port), run in stateful mode after stateless mode proved
+  broken under this SDK version's Node HTTP bridge.
 
 ## Notes
 
@@ -304,3 +312,6 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   built in #20) was never wired into the composition root — every agent used the
   `identitySanitize` no-op placeholder in production. Now wired for Planner/Navigator/
   Verifier/Critic.
+- #83 (MCP client over Streamable HTTP) merged 2026-07-10 — see ADR 0031. First issue
+  in M9; `@aegis/mcp` gains a real dependency (`@modelcontextprotocol/sdk`) and its first
+  real implementation.
