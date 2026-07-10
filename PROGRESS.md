@@ -77,7 +77,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #83 P2-4 MCP client (Streamable HTTP) — blocked by: none
 - [x] #84 P2-5 MCP server configuration + storage — blocked by: #83
-- [ ] #85 P2-6 MCP tools → ToolRegistry — blocked by: #84, #81, #82
+- [x] #85 P2-6 MCP tools → ToolRegistry — blocked by: #84, #81, #82
 - [ ] #86 P2-7 MCP permissioning — blocked by: #85
 
 ### M10 — WebMCP fast-path
@@ -290,6 +290,14 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   `@aegis/mcp` stays a sibling of `@aegis/security` — resolution is an injected
   `SecretResolver` function, not a vault import. `testMcpServerConnection` performs the
   same resolve → connect → list-tools steps a real `ToolRegistry` wiring will.
+- [0033](docs/adr/0033-mcp-tools-to-toolregistry.md) — MCP tools → `ToolRegistry` (Phase
+  2, issue #85): `registerMcpServerTools` connects, lists tools, and registers each as
+  `mcp.<server>.<tool>`; risk is inferred from MCP annotations (`readOnlyHint` → `read`,
+  anything else including no annotations → fail-safe `state_changing`); a minimal
+  `jsonSchemaToZod` converter (not a general-purpose library) builds `Tool.inputSchema`.
+  `@aegis/mcp` takes its first cross-package dependency (`@aegis/actions`). MCP
+  elicitation plumbing (`onElicitationRequest`) is wired into `McpClient.connect` but not
+  yet routed through a real confirmation UI — that's #90.
 
 ## Notes
 
@@ -322,3 +330,4 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   in M9; `@aegis/mcp` gains a real dependency (`@modelcontextprotocol/sdk`) and its first
   real implementation.
 - #84 (MCP server config + storage) merged 2026-07-10 — see ADR 0032.
+- #85 (MCP tools → ToolRegistry) merged 2026-07-10 — see ADR 0033. Last issue in M9.

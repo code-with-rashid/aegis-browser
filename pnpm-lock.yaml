@@ -299,6 +299,9 @@ importers:
 
   packages/mcp:
     dependencies:
+      '@aegis/actions':
+        specifier: workspace:*
+        version: link:../actions
       '@aegis/shared':
         specifier: workspace:*
         version: link:../shared

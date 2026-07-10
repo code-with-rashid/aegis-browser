@@ -1,8 +1,12 @@
 export type {
   McpServerConfig,
+  McpToolAnnotations,
   McpToolDescriptor,
   McpTextContent,
   McpToolCallResult,
+  ElicitationRequest,
+  ElicitationResponse,
+  ElicitationHandler,
   CreateMcpClientOptions,
   McpClient,
 } from './client/mcp-client';
@@ -33,3 +37,11 @@ export { resolveAuthHeaders } from './config/resolve-headers';
 
 export type { McpConnectionTestError } from './config/test-connection';
 export { testMcpServerConnection } from './config/test-connection';
+
+export { jsonSchemaToZod } from './registry/json-schema-to-zod';
+
+export type {
+  McpToolRegistrationError,
+  RegisteredMcpServerTools,
+} from './registry/mcp-tool-registry';
+export { inferMcpToolRisk, registerMcpServerTools } from './registry/mcp-tool-registry';
