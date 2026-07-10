@@ -1,3 +1,4 @@
+import type { ToolRegistry } from '@aegis/actions';
 import { generateStructured, type GenerateStructuredOptions, type ModelRouter } from '@aegis/llm';
 import { err, isErr, ok } from '@aegis/shared';
 
@@ -15,10 +16,12 @@ export interface CreateCriticServiceOptions {
 /**
  * Builds the {@link CriticService}: an independent model pass, always called (unlike the
  * Verifier, alignment can't be shortcut by a mechanical heuristic — it's a semantic
- * judgment), against the cheap `critic` role.
+ * judgment), against the cheap `critic` role. `toolRegistry` resolves each proposed tool
+ * call's metadata (source, description) for the prompt (#82).
  */
 export function createCriticService(
   modelRouter: ModelRouter,
+  toolRegistry: ToolRegistry,
   options: CreateCriticServiceOptions = {},
 ): CriticService {
   return async (input: CriticCheckInput, signal?: AbortSignal) => {
@@ -33,6 +36,7 @@ export function createCriticService(
 
     const prompt = buildCriticPrompt(
       input,
+      toolRegistry,
       options.sanitize !== undefined ? { sanitize: options.sanitize } : {},
     );
     const result = await generateStructured(providerResult.value, CriticOutputSchema, prompt, {

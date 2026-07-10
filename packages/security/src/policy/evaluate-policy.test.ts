@@ -1,4 +1,3 @@
-import { toElementRef } from '@aegis/shared';
 import { describe, expect, it } from 'vitest';
 
 import type { ActionRisk } from '@aegis/actions';
@@ -129,47 +128,33 @@ describe('resolveEffectiveMode', () => {
 
 describe('evaluatePolicy', () => {
   const now = 1_000_000;
-  const click = { type: 'click' as const, ref: toElementRef('e1') };
 
-  it('allows a read action with no configured policy', () => {
-    const extract = { type: 'extract' as const, instructions: 'get title' };
-    expect(evaluatePolicy({ action: extract, origin: 'https://example.com', now })).toBe('allow');
+  it('allows a read risk with no configured policy', () => {
+    expect(evaluatePolicy({ risk: 'read', origin: 'https://example.com', now })).toBe('allow');
   });
 
-  it('confirms a state-changing action by default (ask mode, no policy)', () => {
-    expect(
-      evaluatePolicy({
-        action: click,
-        origin: 'https://example.com',
-        riskContext: { elementName: 'Submit Order' },
-        now,
-      }),
-    ).toBe('confirm');
+  it('confirms a state-changing risk by default (ask mode, no policy)', () => {
+    expect(evaluatePolicy({ risk: 'state_changing', origin: 'https://example.com', now })).toBe(
+      'confirm',
+    );
   });
 
-  it('allows a state-changing action when explicitly opted in', () => {
+  it('allows a state-changing risk when explicitly opted in', () => {
     const policy: SitePolicy = {
       origin: 'https://example.com',
       mode: 'allow',
       allowStateChanging: true,
     };
     expect(
-      evaluatePolicy({
-        action: click,
-        origin: 'https://example.com',
-        policy,
-        riskContext: { elementName: 'Submit Order' },
-        now,
-      }),
+      evaluatePolicy({ risk: 'state_changing', origin: 'https://example.com', policy, now }),
     ).toBe('allow');
   });
 
   it('denies everything on a hard deny-listed origin, including reads', () => {
-    const extract = { type: 'extract' as const, instructions: 'get balance' };
-    expect(evaluatePolicy({ action: extract, origin: 'https://www.chase.com', now })).toBe('deny');
+    expect(evaluatePolicy({ risk: 'read', origin: 'https://www.chase.com', now })).toBe('deny');
   });
 
-  it('denies a plain click on a deny-listed origin even without a state-changing signal', () => {
-    expect(evaluatePolicy({ action: click, origin: 'https://www.chase.com', now })).toBe('deny');
+  it('denies a plain input risk on a deny-listed origin even without a state-changing signal', () => {
+    expect(evaluatePolicy({ risk: 'input', origin: 'https://www.chase.com', now })).toBe('deny');
   });
 });

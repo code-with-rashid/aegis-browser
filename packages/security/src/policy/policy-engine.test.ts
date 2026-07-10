@@ -1,22 +1,19 @@
-import { createMemoryStorage, toElementRef } from '@aegis/shared';
+import { createMemoryStorage } from '@aegis/shared';
 import { describe, expect, it } from 'vitest';
 
 import { createPolicyEngine } from './policy-engine';
 import { createPolicyStore } from './policy-store';
 
 describe('createPolicyEngine', () => {
-  it('confirms a state-changing action by default when no policy is configured', async () => {
+  it('confirms a state-changing risk by default when no policy is configured', async () => {
     const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
-    const click = { type: 'click' as const, ref: toElementRef('e1') };
 
-    const result = await engine.evaluate(click, 'https://example.com', {
-      elementName: 'Submit Order',
-    });
+    const result = await engine.evaluate('state_changing', 'https://example.com');
 
     expect(result).toEqual({ ok: true, value: 'confirm' });
   });
 
-  it('allows a state-changing action once the origin opts in', async () => {
+  it('allows a state-changing risk once the origin opts in', async () => {
     const store = createPolicyStore(createMemoryStorage());
     await store.setPolicy({
       origin: 'https://example.com',
@@ -24,29 +21,24 @@ describe('createPolicyEngine', () => {
       allowStateChanging: true,
     });
     const engine = createPolicyEngine(store);
-    const click = { type: 'click' as const, ref: toElementRef('e1') };
 
-    const result = await engine.evaluate(click, 'https://example.com', {
-      elementName: 'Submit Order',
-    });
+    const result = await engine.evaluate('state_changing', 'https://example.com');
 
     expect(result).toEqual({ ok: true, value: 'allow' });
   });
 
-  it('denies every action on a hard deny-listed origin by default', async () => {
+  it('denies every risk on a hard deny-listed origin by default', async () => {
     const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
-    const extract = { type: 'extract' as const, instructions: 'get balance' };
 
-    const result = await engine.evaluate(extract, 'https://www.chase.com');
+    const result = await engine.evaluate('read', 'https://www.chase.com');
 
     expect(result).toEqual({ ok: true, value: 'deny' });
   });
 
-  it('allows a read action with no configured policy', async () => {
+  it('allows a read risk with no configured policy', async () => {
     const engine = createPolicyEngine(createPolicyStore(createMemoryStorage()));
-    const extract = { type: 'extract' as const, instructions: 'get title' };
 
-    const result = await engine.evaluate(extract, 'https://example.com');
+    const result = await engine.evaluate('read', 'https://example.com');
 
     expect(result).toEqual({ ok: true, value: 'allow' });
   });

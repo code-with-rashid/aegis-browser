@@ -2,7 +2,7 @@ import { err } from '@aegis/shared';
 
 import type { Tool, ToolContext, ToolResult, ToolSource } from './tool';
 import { ToolExecutionError } from './tool';
-import type { ActionRisk } from './risk';
+import { elevateRisk, type ActionRisk, type ActionRiskContext } from './risk';
 
 /** Optional filter for {@link ToolRegistry.list}. */
 export interface ToolListFilter {
@@ -72,5 +72,22 @@ export class ToolRegistry {
     }
 
     return tool.execute(parsed.data, ctx);
+  }
+
+  /**
+   * Classifies `id`'s risk for the security policy engine (Phase 2, #82): an unknown
+   * tool id fails safe as `state_changing` (deny-by-default, matching the old
+   * `ActionRegistry`'s behavior). A `source: "browser"` tool's static risk is further
+   * elevated by `context` exactly as `classifyActionRisk` already does (e.g. a "Submit
+   * Order" element name); any other source's risk is used as declared — `mcp`/`webmcp`
+   * tools (#85/#86) assign their own risk at registration time, since there's no
+   * page-element context to elevate from.
+   */
+  classify(id: string, context: ActionRiskContext = {}): ActionRisk {
+    const tool = this.tools.get(id);
+    if (!tool) {
+      return 'state_changing';
+    }
+    return tool.source === 'browser' ? elevateRisk(tool.risk, context) : tool.risk;
   }
 }

@@ -70,6 +70,20 @@ describe('createDefaultToolRegistry', () => {
 
     expect(isErr(result) && result.error.code).toBe('TOOL_INVALID_ARGS');
   });
+
+  it('classifies a browser tool consistently with classifyActionRisk, including elevation', () => {
+    const registry = createDefaultToolRegistry();
+    expect(registry.classify('browser.click')).toBe('input');
+    expect(registry.classify('browser.click', { elementName: 'Submit Order' })).toBe(
+      'state_changing',
+    );
+    expect(registry.classify('browser.navigate')).toBe('navigate');
+  });
+
+  it('defaults an unknown tool id to the most restrictive risk', () => {
+    const registry = createDefaultToolRegistry();
+    expect(registry.classify('mcp.some.future.tool')).toBe('state_changing');
+  });
 });
 
 describe('ToolRegistry extensibility (MCP/WebMCP-style custom registration)', () => {
@@ -112,5 +126,20 @@ describe('ToolRegistry extensibility (MCP/WebMCP-style custom registration)', ()
   it('starts empty when constructed directly (no built-ins)', () => {
     const registry = new ToolRegistry();
     expect(registry.list()).toHaveLength(0);
+  });
+
+  it("uses a non-browser tool's declared risk as-is, without keyword elevation", () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      id: 'mcp.checkout.buy',
+      source: 'mcp',
+      description: 'Buy an item.',
+      inputSchema: z.object({}),
+      risk: 'read',
+      execute: () => Promise.resolve(ok(undefined)),
+    });
+
+    // no elementName-based elevation for non-browser tools, even with a state-changing-looking name
+    expect(registry.classify('mcp.checkout.buy', { elementName: 'Buy Now' })).toBe('read');
   });
 });
