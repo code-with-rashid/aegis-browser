@@ -15,7 +15,11 @@ Aegis lets you drive your own browser with an LLM agent — clicking, filling fo
 
 ## Status
 
-**v0.1.0.** All of M0–M7 (`PROGRESS.md`'s milestone checklist) is implemented: the perception/action/agent-loop core, the security core (policy engine, confirmation gate, alignment critic, secret vault), the side panel and options UI, and end-to-end/reliability/security test suites running in CI. Phase 2 (MCP/WebMCP tool calling) and Phase 3 (record→compile workflows) are designed for but not yet built — see `docs/DESIGN.md`.
+**v0.2.0.** All of M0–M12 (`PROGRESS.md`'s milestone checklist) is implemented: the
+perception/action/agent-loop core, the security core (policy engine, confirmation gate,
+alignment critic, secret vault), the side panel and options UI, MCP + WebMCP tool calling
+(Phase 2), and end-to-end/reliability/security test suites running in CI. Phase 3
+(record→compile workflows) is designed for but not yet built — see `docs/DESIGN.md`.
 
 ## Install (load unpacked)
 
@@ -75,6 +79,38 @@ Aegis never bundles a model or a backend — you configure your own provider bef
 5. **Pause**/**Resume**/**Stop** are available at any time. A run's trace and state survive
    a side-panel close and a service-worker restart.
 
+## MCP & WebMCP tools
+
+Beyond clicking/typing/reading pages, Aegis can call declared tools directly — faster and
+more reliable than driving a UI, when a tool covers what you asked for.
+
+- **MCP (Model Context Protocol) servers** — a remote or local service exposing tools over
+  Streamable HTTP. To add one: open **Options → Tools & MCP**, and under "Add an MCP
+  server" enter a **Name**, the server's **URL**, and (only if it needs one) an **Auth
+  header name** (e.g. `Authorization`) plus a **Vault secret name** referencing a value
+  you've already added on the **Secrets** tab — the header's real value is resolved from
+  the vault at connection time and never stored in the server config itself. Click **Add**,
+  then **Discover tools** to see what the server offers (name, description, input schema,
+  and its inferred risk — `read` or `state_changing`). Every discovered tool starts
+  **"Pending review"**: use its permission dropdown to set **Allow** or **Deny** — nothing
+  is ever auto-trusted, and an un-reviewed tool is never callable. Uncheck **Enabled** to
+  disable a server without removing its configuration.
+- **WebMCP** — pages can declare their own tools directly (via the emerging
+  `document.modelContext` API); when one does, Aegis prefers calling it over driving the
+  page's UI, since it's a direct, reliable capability rather than a simulated click. This
+  is feature-detected automatically per page — nothing to configure per site. A single
+  **"Use WebMCP tools when a page declares them"** checkbox on the **Tools & MCP** tab
+  turns it off globally if you'd rather Aegis never use a page's declared tools at all.
+- **Same safety gate as everything else.** A tool call — MCP, WebMCP, or a browser
+  action — is classified `read` or `state_changing`, checked against the per-site policy
+  and alignment critic, and a `state_changing` call pauses for the same confirmation
+  dialog, now showing which tool would be called and a summary of its arguments. A tool's
+  own description is treated exactly like page content: untrusted data, sanitized before
+  it ever reaches a prompt, never an instruction.
+
+Once a server's tools are allowed, just describe the task in the side panel as usual —
+Aegis calls the tool directly when it covers the goal, with no other setup needed.
+
 ## Security model
 
 - Page content is always treated as **untrusted data**, never as instructions — sanitized
@@ -87,9 +123,14 @@ Aegis never bundles a model or a backend — you configure your own provider bef
 - A per-site policy engine plus a hard deny-list (banking, government, adult content by
   default) governs what Aegis can act on; a `navigate`/open-tab action is checked against
   its _destination_, not just the page you're currently on.
+- **Every tool call — MCP, WebMCP, or a browser action — passes through the identical
+  gate**: risk classification, per-site policy, alignment critic, confirmation. No tool
+  is ever auto-trusted; a newly discovered MCP/WebMCP tool starts denied until reviewed.
 - All of the above is exercised by an end-to-end security test suite (indirect
-  prompt-injection fixtures, a "compromised navigator" worst case) that runs in CI — see
-  `apps/extension/README.md`'s E2E/security sections and `docs/adr/0022-security-test-suite.md`.
+  prompt-injection fixtures, a "compromised navigator" worst case, and hostile tool
+  descriptions attempting the same) that runs in CI — see `apps/extension/README.md`'s
+  E2E/security sections and `docs/adr/0022-security-test-suite.md`/
+  `docs/adr/0040-tool-use-evals-and-security-suite.md`.
 
 ## Development
 
@@ -118,7 +159,7 @@ log documenting every real design decision made while building this.
 - `apps/extension/README.md` — the extension app itself: composition root, side panel,
   options UI, E2E/security test suites.
 - Domain packages (`packages/agent`, `packages/security`, `packages/actions`,
-  `packages/perception`, `packages/llm`, `packages/shared`) are pure, framework-agnostic,
+  `packages/perception`, `packages/llm`, `packages/mcp`, `packages/shared`) are pure, framework-agnostic,
   and each has its own `README.md`.
 
 ## License

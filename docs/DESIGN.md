@@ -2,7 +2,9 @@
 
 > **What it is:** A local-first, bring-your-own-key browser-automation agent delivered as an MV3 extension, where **reliability and safety are the product**.
 > **Positioning:** _Private, reliable, safe web automation that runs in your own logged-in browser._
-> **Status:** Implemented — v0.1.0 shipped. See `PROGRESS.md` and `docs/adr/` for how the design below was realized and where real decisions departed from this draft.
+> **Status:** Implemented — v0.1.0 (MVP core) and v0.2.0 (MCP/WebMCP tool calling, §16)
+> both shipped. See `PROGRESS.md` and `docs/adr/` for how the design below was realized and
+> where real decisions departed from this draft.
 
 ---
 
@@ -39,7 +41,8 @@ Nanobrowser proved the demand for a free, private, BYOK browser agent — but it
 - No autonomous purchases/sends without confirmation.
 - No headless / scheduled / background runs (Phase 3).
 - No record→replay workflow compiler (Phase 3).
-- No MCP/WebMCP tool ecosystem yet (Phase 2 — but the interfaces are designed for it now).
+- ~~No MCP/WebMCP tool ecosystem yet (Phase 2 — but the interfaces are designed for it
+  now).~~ Shipped in v0.2.0 — see §16.
 - No cloud sync, no accounts, no telemetry beyond opt-in local-only diagnostics.
 - Firefox ships shortly after, not on day one (Chrome + Edge first).
 
@@ -326,20 +329,20 @@ Plus a persistent **Stop/Pause** and a post-run summary. (Wireframes to follow i
 
 ## 11. Tech stack & repo structure
 
-| Layer                   | Choice                                                                                                |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| Extension framework     | **WXT** (MV3, Vite, cross-browser)                                                                    |
-| Language                | **TypeScript**                                                                                        |
-| UI                      | **React + Tailwind + shadcn/ui**                                                                      |
-| Agent loop              | **XState** (resumable state machine)                                                                  |
-| Model + tools           | **Vercel AI SDK v6/7** (BYOK)                                                                         |
-| Schemas / validation    | **Zod** + JSON-repair fallback                                                                        |
-| Perception / control    | **chrome.debugger → CDP** (AX tree, DOM, screenshot) — no content-script fast path in v0.1.0; see §14 |
-| Security                | **WebCrypto** vault, content trust-tagging, alignment critic                                          |
-| Extensibility (Phase 2) | Official **@modelcontextprotocol** client + WebMCP fast-path                                          |
-| UI state                | **Zustand**                                                                                           |
-| Testing                 | **Vitest** + **Playwright** + reliability **eval harness**                                            |
-| Repo                    | **pnpm + Turbo** monorepo                                                                             |
+| Layer                                   | Choice                                                                                                                  |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Extension framework                     | **WXT** (MV3, Vite, cross-browser)                                                                                      |
+| Language                                | **TypeScript**                                                                                                          |
+| UI                                      | **React + Tailwind + shadcn/ui**                                                                                        |
+| Agent loop                              | **XState** (resumable state machine)                                                                                    |
+| Model + tools                           | **Vercel AI SDK v6/7** (BYOK)                                                                                           |
+| Schemas / validation                    | **Zod** + JSON-repair fallback                                                                                          |
+| Perception / control                    | **chrome.debugger → CDP** (AX tree, DOM, screenshot) — no content-script fast path in v0.1.0; see §14                   |
+| Security                                | **WebCrypto** vault, content trust-tagging, alignment critic                                                            |
+| Extensibility (Phase 2, shipped v0.2.0) | Official **@modelcontextprotocol** SDK (Streamable HTTP) + WebMCP fast-path (`document.modelContext` feature-detection) |
+| UI state                                | **Zustand**                                                                                                             |
+| Testing                                 | **Vitest** + **Playwright** + reliability **eval harness**                                                              |
+| Repo                                    | **pnpm + Turbo** monorepo                                                                                               |
 
 ```
 aegis/
@@ -356,7 +359,7 @@ aegis/
 │  ├─ actions/               # action schemas + CDP executors
 │  ├─ security/              # policy engine, classifier, vault, sanitizer
 │  ├─ llm/                   # AI SDK providers, structured-output + repair
-│  ├─ mcp/                   # (Phase 2) MCP client + WebMCP adapter
+│  ├─ mcp/                   # MCP client (Streamable HTTP) + WebMCP adapter (Phase 2, v0.2.0)
 │  └─ shared/                # types, storage, logging
 ├─ evals/                    # task set + harness (reliability gate)
 └─ turbo.json / pnpm-workspace.yaml
@@ -375,14 +378,14 @@ aegis/
 
 ## 13. Build plan / milestones
 
-| Phase                     | Deliverable                                                                                                    | Exit criteria                                                                |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| **0 — Spike** (throwaway) | Drive one real site end-to-end via CDP AX-tree perception + AI SDK tool-calling with a hard human-confirm gate | Proves the perception→action→confirm loop works; informs the real interfaces |
-| **1 — Core loop**         | WXT scaffold, XState loop, Planner/Navigator, perception pipeline, action executors                            | Completes read-only use cases (1,2,4) reliably                               |
-| **2 — Security core**     | Policy engine, confirmation gate, alignment critic, content trust-tagging, secret vault                        | Use case 3 gated correctly; passes baseline injection suite                  |
-| **3 — Trust UX + evals**  | Action trace, permissions panel, vault UI, eval harness wired to CI                                            | Beats Nanobrowser baseline on the eval set; ship v0.1 (Chrome+Edge)          |
-| **Phase 2 (post-MVP)**    | MCP client + WebMCP fast-path                                                                                  | Agent can call declared site/tool APIs                                       |
-| **Phase 3 (post-MVP)**    | Record→compile self-healing workflows + scheduled runs                                                         | Reusable, deterministic automations                                          |
+| Phase                        | Deliverable                                                                                                    | Exit criteria                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **0 — Spike** (throwaway)    | Drive one real site end-to-end via CDP AX-tree perception + AI SDK tool-calling with a hard human-confirm gate | Proves the perception→action→confirm loop works; informs the real interfaces    |
+| **1 — Core loop**            | WXT scaffold, XState loop, Planner/Navigator, perception pipeline, action executors                            | Completes read-only use cases (1,2,4) reliably                                  |
+| **2 — Security core**        | Policy engine, confirmation gate, alignment critic, content trust-tagging, secret vault                        | Use case 3 gated correctly; passes baseline injection suite                     |
+| **3 — Trust UX + evals**     | Action trace, permissions panel, vault UI, eval harness wired to CI                                            | Beats Nanobrowser baseline on the eval set; ship v0.1 (Chrome+Edge)             |
+| **Phase 2 — shipped v0.2.0** | MCP client + WebMCP fast-path, tool-call-aware trace/confirmation, tool-use evals + security suite             | Agent calls declared MCP/WebMCP tool APIs, gated identically to browser actions |
+| **Phase 3 (post-MVP)**       | Record→compile self-healing workflows + scheduled runs                                                         | Reusable, deterministic automations                                             |
 
 ---
 
@@ -393,7 +396,7 @@ aegis/
 - **Reliability ceiling is real.** Even frontier agents sit well under 100% on live multi-step tasks. We compete on _relative_ reliability + honesty, not magic. The verifier + evals are the levers.
 - **Vision-fallback cost.** Keep it a genuine fallback; measure how often it triggers.
 - **Solo-maintainer risk (the thing that's hurting Nanobrowser).** Keep the core small, typed, and well-tested; make packages independently ownable; write the eval harness early so contributors can change code safely.
-- **WebMCP timing.** Origin trial mid-2026, mass adoption ~2027 — correct to treat as an opportunistic fast-path, not a dependency.
+- **WebMCP timing.** Origin trial mid-2026, mass adoption ~2027 — correct to treat as an opportunistic fast-path, not a dependency. Shipped in v0.2.0 exactly that way: feature-detected per page (`document.modelContext`), with a global off switch and a DOM-driven fallback when a page declares nothing (§16).
 
 ---
 
@@ -412,13 +415,63 @@ Every core choice ties to a specific, verified Nanobrowser weakness:
 | No human gate on risky actions                         | Mandatory confirmation for all state-changing actions          |
 | Chrome/Edge only                                       | WXT cross-browser                                              |
 | Reliability is unmeasured ("use a smarter model")      | Eval harness gates every release                               |
-| No tools / MCP / API                                   | MCP + WebMCP designed in as Phase 2                            |
+| No tools / MCP / API                                   | MCP client + WebMCP fast-path, shipped v0.2.0 (Phase 2)        |
 | Single-maintainer, stalling                            | Small typed core + early evals so others can contribute safely |
 
 ---
 
-_End of design draft. All phases through "3 — Trust UX + evals" above shipped as v0.1.0 —
-see `PROGRESS.md`'s milestone checklist and ADR log for the 35 issues that implemented
-this design, including where implementation surfaced real decisions this draft didn't
-anticipate. Phase 2 (MCP/WebMCP) and Phase 3 (record→compile workflows) remain
-post-MVP, not yet started._
+## 16. Phase 2 — MCP + WebMCP tool calling (shipped v0.2.0)
+
+Built as 14 issues (#80–#93, `PROGRESS.md`'s M8–M12), all documented in `docs/adr/`
+(ADRs 0028–0040). Summary of what actually shipped, since several real decisions departed
+from or sharpened what this draft only sketched:
+
+- **A unified `Tool` abstraction** (`@aegis/actions`'s `ToolRegistry`) is the one shape a
+  browser action, an MCP tool, and a WebMCP tool all implement — `{id, source, description,
+inputSchema, risk, execute}`. The Navigator's decision became source-agnostic: a
+  `ToolCall {toolId, args}`, not an `Action`; a browser-only `actions` view is still
+  derived from it for backward-compatible consumers (the trace's "Edit" flow, mainly).
+- **MCP client** (`@aegis/mcp`) wraps the official `@modelcontextprotocol/sdk` over
+  Streamable HTTP (no stdio — a browser extension can't spawn child processes). Servers
+  are user-configured (URL, display name, an optional auth header referencing a vault
+  secret by name, never a raw value) and connected fresh on every task start — no
+  persistent connection to manage across service-worker restarts.
+- **Deny-by-default tool permissioning**, two independent layers: an admission gate
+  (`McpToolPolicy`: a tool a user has never reviewed is recorded `deny` and excluded
+  outright, mirroring nothing being auto-trusted) sits in front of the existing per-call
+  risk gate (`ActionRisk` via `PolicyEngine`) every tool call — MCP, WebMCP, or browser —
+  already passed through unchanged. Risk is inferred fail-safe: no `readOnlyHint` (or an
+  explicit `destructiveHint`) means `state_changing`, never assumed safe.
+- **WebMCP** is feature-detected per page (`document.modelContext`, Chrome's current
+  in-progress attribute name for the emerging spec) via a two-world content-script bridge
+  (a MAIN-world script with real access to the page's own declaration, an ISOLATED-world
+  script with real `chrome.*` access, talking only over a shared-`document` event
+  protocol — a live JS reference can't cross that boundary, only structured-cloned data
+  can). The Navigator prefers a declared tool over driving the DOM when one covers the
+  sub-goal; a page with none present falls back to ordinary DOM actions exactly as before,
+  and a global options-page toggle can turn WebMCP off entirely regardless of what any
+  page declares.
+- **The confirmation gate and action trace are tool-call-aware**, not just
+  browser-action-aware: a `state_changing` MCP/WebMCP call gets the same plain-language
+  preview (tool id, source, a capped args summary) a browser action always has, and the
+  trace shows a visible source badge plus an expandable args/result detail per call.
+- **A tool's `description` is untrusted content, always** — it comes from an external
+  server or a page's own script, exactly as unverified as page text — and is sanitized
+  through the same pipeline (§7.1) before it ever reaches a Navigator or Critic prompt.
+  The security test suite (§12) was extended with hostile-tool corpus cases (a malicious
+  description attempting prompt injection, a hostile tool baiting an unauthorized call)
+  proving this holds end-to-end, not just that a sanitize hook exists.
+- **Not built in Phase 2**: MCP elicitation (a server asking the connecting client for
+  more input mid-call) has real client-side plumbing but no UI wired to it yet; an MCP
+  server needing an auth header can't yet connect from a live task specifically, because
+  the background service worker has no way to share an _unlocked_ secret vault with the
+  options page's separate process — a real, documented limitation (ADR 0037), not silently
+  worked around, and one that equally affects `input_text`/`send_keys` secret placeholders.
+
+---
+
+_End of design draft. Phases "0 — Spike" through "3 — Trust UX + evals" shipped as
+v0.1.0; Phase 2 (§16) shipped as v0.2.0. See `PROGRESS.md`'s milestone checklist and ADR
+log for the 93 issues that implemented this design, including every place implementation
+surfaced a real decision this draft didn't anticipate. Phase 3 (record→compile workflows)
+remains post-MVP, not yet started._
