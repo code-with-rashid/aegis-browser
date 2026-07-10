@@ -58,26 +58,33 @@ exactly as they gate a DOM click. `apps/extension/background/policy-service.ts`'
 #82) — an unrecognized tool id fails safe to `state_changing` — then evaluates that risk
 against `@aegis/security`'s policy engine, which since #82 takes an already-classified
 `ActionRisk` rather than an `Action`, so it has no notion of action/tool shapes at all.
-`context.proposedActions` (the `source: "browser"` subset, still populated by the
-Navigator) is what `buildConfirmationRequest`/the trace consume below — they aren't
-tool-call-aware yet (#90).
+`buildConfirmationRequest` (`loop/confirmation.ts`) turns the pending batch into a
+`ConfirmationRequest {toolCalls, actions, preview, reason?}` (#90): `toolCalls` is every
+pending call, any source, each described via `describeToolCall` (`{toolId, source,
+description, argsSummary}`) — this is what a confirmation UI (#27) renders as its main
+preview, so a `state_changing` MCP/WebMCP call gets a real preview instead of being
+silently invisible. `actions`/`preview` remain the `source: "browser"` subset only,
+index-aligned as before — `context.proposedActions` still feeds them, and they exist
+solely so the `EDIT` flow (below) has real `Action`s with editable text fields to work
+from; editing an arbitrary non-browser tool's args isn't supported. Building `toolCalls`
+requires a `ToolRegistry` (to resolve each call's `source`) and a `sanitize` function (an
+MCP/WebMCP tool's `description` is untrusted), so `createAgentLoopMachine` now takes both
+as constructor dependencies, alongside `services`/`executorContext` — the composition root
+(`run-manager.ts`) already holds the run's `toolRegistry` for the trace (below), so this
+is just one more place it gets threaded through.
 
-`buildConfirmationRequest`/`describeAction` (`loop/confirmation.ts`) turn the pending
-actions into a `ConfirmationRequest {actions, preview, reason?}` — one human-readable line
-per action (e.g. `Click "Submit Order"`), built by matching each action's `ref` against
-`context.perception.elements` for its real accessible name. This is what a confirmation
-UI (#27) renders instead of raw action JSON. `describeToolCall` (same file) is the
-tool-call-aware equivalent the alignment critic's prompt uses (below): a `source:
-"browser"` call delegates to `describeAction`; any other tool's `description` — untrusted,
-since it comes from an external MCP server or a page's own WebMCP declaration — is run
-through the caller's `sanitize` function first.
+`describeAction` (same file) renders one browser `Action` in plain language (e.g. `Click
+"Submit Order"`), by matching its `ref` against `context.perception.elements` for the
+real accessible name; `describeToolCall` is the tool-call-aware wrapper the confirmation
+preview and the alignment critic's prompt both use — a `source: "browser"` call delegates
+to `describeAction`, any other tool's `description` is run through `sanitize` first.
 
 From `confirming`: `APPROVE` clears `pendingConfirmation` and proceeds to `actingGate`;
 `REJECT` clears it and replans; `EDIT {actions}` replaces `proposedActions` (and
 re-derives `proposedToolCalls` via `actionToToolCall`, keeping `acting` in sync with what
-the human sees), rebuilds the preview, and stays in `confirming` — a human can revise a
-proposed action without it ever executing unsupervised. `loop/controls.ts` exposes all
-three as `approveLoop`/`rejectLoop`/`editLoop`.
+the human sees), rebuilds `pendingConfirmation` (browser-only, as `EDIT` always has been),
+and stays in `confirming` — a human can revise a proposed action without it ever executing
+unsupervised. `loop/controls.ts` exposes all three as `approveLoop`/`rejectLoop`/`editLoop`.
 
 ## The alignment critic
 
@@ -219,11 +226,11 @@ transform-free `LlmActionSchema` mirror, which is no longer needed — see
 `resolveToolCalls` (`navigator/resolve-tool-calls.ts`) validates each raw `{toolId, args}`
 against that tool's own `inputSchema`, producing both the authoritative `toolCalls` and a
 derived `actions: Action[]` (the `source: "browser"` subset, re-parsed through the real,
-branded action schemas). The policy engine, alignment critic, and trace are already
-tool-call-aware (`toolCalls`, any source — #82, #86); `actions` still feeds only the
-confirmation UI's preview (`buildConfirmationRequest` takes `Action[]`), which stays
-browser-only until #90 generalizes it. An unknown `toolId` or schema-invalid `args` is
-collected as an issue rather than thrown.
+branded action schemas). The policy engine, alignment critic, trace, and confirmation
+preview are all tool-call-aware (`toolCalls`, any source — #82, #86, #90); `actions` still
+feeds only the confirmation UI's `EDIT` flow, which stays browser-only (editing an
+arbitrary non-browser tool's args isn't supported). An unknown `toolId` or schema-invalid
+`args` is collected as an issue rather than thrown.
 
 A tool id starting with `mcp.` or `web.` is a _declared_ capability, and
 `NAVIGATOR_SYSTEM_PROMPT` tells the model to prefer calling one directly over a sequence

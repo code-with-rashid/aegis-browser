@@ -88,7 +88,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M11 — UX & governance
 
 - [x] #89 P2-10 Tools & MCP management UI — blocked by: #86, #87
-- [ ] #90 P2-11 Trace + confirmation for tool calls — blocked by: #82
+- [x] #90 P2-11 Trace + confirmation for tool calls — blocked by: #82
 
 ### M12 — Integration & release
 
@@ -355,6 +355,18 @@ z.unknown()}`, with per-tool schemas rendered as prompt text instead
   auth is unaffected) - documented, not silently worked around; the same gap already
   existed for `input_text`/`send_keys` secret placeholders, which also have no live-run
   caller today.
+- [0038](docs/adr/0038-trace-confirmation-tool-calls.md) — Trace + confirmation for tool
+  calls (Phase 2, issue #90): closed the `ConfirmationRequest`/`buildConfirmationRequest`
+  `Action[]`-only gap ADR 0033/0036/0037 all flagged — a new `toolCalls:
+PendingToolCallPreview[]` field (any source, via `describeToolCall` + `summarizeArgs`,
+  moved from `trace.ts` into `confirmation.ts` as the one shared implementation) is what
+  the confirmation modal's main view now renders; `actions`/`preview` stay browser-only,
+  feeding only the `EDIT` flow (Edit is disabled when nothing in the batch is a browser
+  action). `createAgentLoopMachine` gains `toolRegistry`/`sanitize` constructor
+  dependencies, the same shape as `executorContext`, since building a tool-call-aware
+  preview needs both. `trace-list.tsx` gains a visible source badge and an expandable
+  "Show args" (toolId + argsSummary) per action, matching the existing "Show raw
+  perception" pattern.
 
 ## Notes
 

@@ -69,11 +69,12 @@ export interface ToolCall {
 export interface DecideOutput {
   /**
    * The browser-`Action` view of `toolCalls` — only entries backed by a
-   * `source: "browser"` tool, re-parsed through the real (branded) action schemas. Feeds
-   * the policy engine, alignment critic, confirmation UI, and trace, none of which are
-   * tool-call-aware yet (#82, #90). Always the full list today (every registered tool is
-   * `source: "browser"` until #85/#87 register others) — will be a subset once MCP/WebMCP
-   * tools are live.
+   * `source: "browser"` tool, re-parsed through the real (branded) action schemas. The
+   * policy engine, alignment critic, confirmation preview, and trace are all
+   * tool-call-aware (`toolCalls`, any source — #82, #86, #90); this view now only feeds
+   * the confirmation UI's `EDIT` flow, which stays browser-only. Always the full list
+   * today (every registered tool is `source: "browser"` until #85/#87 register others) —
+   * will be a subset once MCP/WebMCP tools are live.
    */
   readonly actions: readonly Action[];
   /**

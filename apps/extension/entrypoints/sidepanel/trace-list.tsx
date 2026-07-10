@@ -9,6 +9,52 @@ const OUTCOME_LABEL: Record<string, string> = {
   failed: 'Failed',
 };
 
+function TraceActionView({ action }: { action: TraceStep['actions'][number] }): React.JSX.Element {
+  const [detailExpanded, setDetailExpanded] = useState(false);
+
+  return (
+    <li className={action.succeeded ? '' : 'text-red-600'}>
+      {action.succeeded ? 'OK' : 'FAILED'}
+      {action.source !== undefined && action.source !== 'browser' ? (
+        <span className="mx-1 rounded bg-muted px-1 text-[10px] uppercase text-muted-foreground">
+          {action.source}
+        </span>
+      ) : (
+        ' '
+      )}
+      — {action.description}
+      {action.errorMessage !== undefined ? `: ${action.errorMessage}` : ''}
+      {action.estimatedDomStepsSaved !== undefined ? (
+        <span className="text-muted-foreground">
+          {' '}
+          (~{action.estimatedDomStepsSaved} DOM steps saved)
+        </span>
+      ) : null}
+      {action.argsSummary !== undefined ? (
+        <>
+          {' '}
+          <button
+            type="button"
+            className="text-muted-foreground underline"
+            onClick={() => {
+              setDetailExpanded((expanded) => !expanded);
+            }}
+          >
+            {detailExpanded ? 'Hide' : 'Show'} args
+          </button>
+          {detailExpanded ? (
+            <pre className="mt-0.5 max-h-40 overflow-auto rounded bg-muted p-2 text-[10px]">
+              <span>{action.toolId}</span>
+              {'\n'}
+              <span>{action.argsSummary}</span>
+            </pre>
+          ) : null}
+        </>
+      ) : null}
+    </li>
+  );
+}
+
 function TraceStepView({ step }: { step: TraceStep }): React.JSX.Element {
   const [perceptionExpanded, setPerceptionExpanded] = useState(false);
 
@@ -41,16 +87,7 @@ function TraceStepView({ step }: { step: TraceStep }): React.JSX.Element {
 
       <ul className="mt-1 space-y-0.5">
         {step.actions.map((action, index) => (
-          <li key={index} className={action.succeeded ? '' : 'text-red-600'}>
-            {action.succeeded ? 'OK' : 'FAILED'} — {action.description}
-            {action.errorMessage !== undefined ? `: ${action.errorMessage}` : ''}
-            {action.estimatedDomStepsSaved !== undefined ? (
-              <span className="text-muted-foreground">
-                {' '}
-                (~{action.estimatedDomStepsSaved} DOM steps saved)
-              </span>
-            ) : null}
-          </li>
+          <TraceActionView key={index} action={action} />
         ))}
       </ul>
 

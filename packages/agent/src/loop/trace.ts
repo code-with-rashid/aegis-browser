@@ -1,11 +1,9 @@
 import type { ToolRegistry, ToolSource } from '@aegis/actions';
 
 import { identitySanitize, type SanitizeText } from '../sanitize';
-import { describeToolCall } from './confirmation';
+import { describeToolCall, summarizeArgs } from './confirmation';
 import type { AgentLoopContext } from './machine';
 import type { PolicyDecision, VerifyOutcome } from './services';
-
-const MAX_ARGS_SUMMARY_LENGTH = 200;
 
 /**
  * A fixed, documented estimate — not a measurement — of how many DOM actions (click,
@@ -15,14 +13,6 @@ const MAX_ARGS_SUMMARY_LENGTH = 200;
  * make the savings visible in the trace, not to claim precision.
  */
 const ESTIMATED_DOM_STEPS_PER_DECLARED_TOOL_CALL = 3;
-
-/** A short, human-scannable rendering of a tool call's args, for audit — not a description, just enough to see what was passed. */
-function summarizeArgs(args: unknown): string {
-  const json = JSON.stringify(args);
-  return json.length > MAX_ARGS_SUMMARY_LENGTH
-    ? `${json.slice(0, MAX_ARGS_SUMMARY_LENGTH)}…`
-    : json;
-}
 
 /** One executed tool call within a {@link TraceStep} — a human-readable description (via {@link describeToolCall}) plus enough structured detail (id, source, args) to audit it, whatever its source. */
 export interface TraceActionEntry {

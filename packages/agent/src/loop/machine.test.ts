@@ -1,4 +1,8 @@
-import { createFakeTabManager, type ExecutorContext } from '@aegis/actions';
+import {
+  createDefaultToolRegistry,
+  createFakeTabManager,
+  type ExecutorContext,
+} from '@aegis/actions';
 import { createFakeCdp, type PerceptionPayload } from '@aegis/perception';
 import { err, ok, toElementRef } from '@aegis/shared';
 import { createActor, waitFor } from 'xstate';
@@ -46,7 +50,11 @@ function isFinalized(snapshot: { status: string }): boolean {
 
 describe('agent loop machine', () => {
   it('completes the happy path: planning -> perceiving -> deciding -> policyCheck -> acting -> verifying -> done', async () => {
-    const machine = createAgentLoopMachine(mockServices(), testExecutorContext());
+    const machine = createAgentLoopMachine(
+      mockServices(),
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
     actor.start();
 
@@ -76,7 +84,11 @@ describe('agent loop machine', () => {
           ok({ outcome: 'achieved', taskComplete: true, reasoning: 'cart now shows the item' }),
         ),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
     actor.start();
 
@@ -98,7 +110,11 @@ describe('agent loop machine', () => {
         );
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, {
       input: { task: 'Enter access code 1234 to unlock the members area', tabId: 1 },
     });
@@ -116,7 +132,11 @@ describe('agent loop machine', () => {
       plan: () =>
         Promise.resolve(ok({ subGoal: 'n/a', taskComplete: true, summary: 'Already done' })),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
     actor.start();
 
@@ -130,7 +150,11 @@ describe('agent loop machine', () => {
     const services = mockServices({
       checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Delete account', tabId: 1 } });
     actor.start();
 
@@ -156,7 +180,11 @@ describe('agent loop machine', () => {
       checkPolicy: () =>
         Promise.resolve(ok({ decision: 'confirm', reason: 'Submit Order is state-changing' })),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
     actor.start();
 
@@ -170,7 +198,11 @@ describe('agent loop machine', () => {
     const services = mockServices({
       checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Delete account', tabId: 1 } });
     actor.start();
 
@@ -200,7 +232,11 @@ describe('agent loop machine', () => {
         );
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Delete account', tabId: 1 } });
     actor.start();
 
@@ -225,7 +261,11 @@ describe('agent loop machine', () => {
         );
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Check my bank balance', tabId: 1 } });
     actor.start();
 
@@ -255,7 +295,11 @@ describe('agent loop machine', () => {
         );
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy oat milk', tabId: 1 } });
     actor.start();
 
@@ -277,7 +321,11 @@ describe('agent loop machine', () => {
       checkAlignment: () =>
         Promise.resolve(ok({ aligned: true, reasoning: 'Matches the checkout task' })),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy oat milk', tabId: 1 } });
     actor.start();
 
@@ -293,7 +341,11 @@ describe('agent loop machine', () => {
       checkAlignment: () =>
         Promise.resolve(err(new AgentError('CRITIC_FAILED', 'model returned garbage'))),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy oat milk', tabId: 1 } });
     actor.start();
 
@@ -314,7 +366,11 @@ describe('agent loop machine', () => {
         return Promise.resolve(ok({ actions: [], stuck: decideCalls === 1 }));
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Find the button', tabId: 1 } });
     actor.start();
 
@@ -340,7 +396,11 @@ describe('agent loop machine', () => {
         );
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Click forever', tabId: 1 } });
     actor.start();
 
@@ -362,7 +422,11 @@ describe('agent loop machine', () => {
           },
         }),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Go somewhere', tabId: 1 } });
     actor.start();
 
@@ -387,7 +451,11 @@ describe('agent loop machine', () => {
         return Promise.resolve(ok({ outcome: 'failed', taskComplete: false }));
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Dead-end task', tabId: 1 } });
     actor.start();
 
@@ -403,7 +471,11 @@ describe('agent loop machine', () => {
       decide: () =>
         Promise.resolve(err(new AgentError('NAVIGATOR_FAILED', 'model returned garbage'))),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Confuse the navigator', tabId: 1 } });
     actor.start();
 
@@ -426,7 +498,11 @@ describe('agent loop machine', () => {
         );
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Multi-step task', tabId: 1 } });
     actor.start();
 
@@ -451,7 +527,11 @@ describe('agent loop machine', () => {
         return Promise.resolve(ok(perceptionFixture()));
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
     actor.start();
 
@@ -469,7 +549,11 @@ describe('agent loop machine', () => {
   });
 
   it('stops immediately on STOP, reaching the stopped final state', async () => {
-    const machine = createAgentLoopMachine(mockServices(), testExecutorContext());
+    const machine = createAgentLoopMachine(
+      mockServices(),
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
     actor.start();
 
@@ -483,7 +567,11 @@ describe('agent loop machine', () => {
     const services = mockServices({
       checkPolicy: () => Promise.resolve(ok({ decision: 'confirm' })),
     });
-    const firstMachine = createAgentLoopMachine(services, testExecutorContext());
+    const firstMachine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const firstActor = createActor(firstMachine, { input: { task: 'Delete account', tabId: 1 } });
     firstActor.start();
 
@@ -492,7 +580,11 @@ describe('agent loop machine', () => {
     firstActor.stop(); // simulate the service worker being killed mid-task
 
     // A fresh machine instance (a real restart re-wires services/executor context too).
-    const secondMachine = createAgentLoopMachine(services, testExecutorContext());
+    const secondMachine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const secondActor = createActor(secondMachine, {
       input: { task: 'Delete account', tabId: 1 },
       snapshot: persistedSnapshot,
@@ -517,7 +609,11 @@ describe('agent loop machine', () => {
       // Never reports the sub-goal achieved, so without a step budget this would loop forever.
       verify: () => Promise.resolve(ok({ outcome: 'continue', taskComplete: false })),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, {
       input: { task: 'Never-ending task', tabId: 1, maxSteps: 3 },
     });
@@ -539,7 +635,11 @@ describe('agent loop machine', () => {
         return Promise.resolve(ok({ actions: [], stuck: true }));
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, {
       input: { task: 'Always stuck', tabId: 1, maxReplans: 3 },
     });
@@ -562,7 +662,11 @@ describe('agent loop machine', () => {
         return new Promise(() => {});
       },
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
     actor.start();
 
@@ -581,7 +685,11 @@ describe('agent loop machine', () => {
       // eslint-disable-next-line @typescript-eslint/no-empty-function -- deliberately never resolves
       perceive: () => new Promise(() => {}),
     });
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
     actor.start();
 
@@ -593,7 +701,11 @@ describe('agent loop machine', () => {
   });
 
   it('produces a graceful termination summary from a real actor snapshot', async () => {
-    const machine = createAgentLoopMachine(mockServices(), testExecutorContext());
+    const machine = createAgentLoopMachine(
+      mockServices(),
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Buy milk', tabId: 1 } });
     actor.start();
 

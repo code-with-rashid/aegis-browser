@@ -43,8 +43,13 @@ export type {
 } from './loop/machine';
 export { createAgentLoopMachine, DEFAULT_MAX_STEPS, DEFAULT_MAX_REPLANS } from './loop/machine';
 
-export type { ConfirmationRequest } from './loop/confirmation';
-export { buildConfirmationRequest, describeAction } from './loop/confirmation';
+export type { ConfirmationRequest, PendingToolCallPreview } from './loop/confirmation';
+export {
+  buildConfirmationRequest,
+  describeAction,
+  describeToolCall,
+  summarizeArgs,
+} from './loop/confirmation';
 
 export type { PersistableActor } from './loop/persistence';
 export {

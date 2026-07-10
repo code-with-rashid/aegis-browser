@@ -1,8 +1,9 @@
-import type { Action, ExecutorContext } from '@aegis/actions';
+import type { Action, ExecutorContext, ToolRegistry } from '@aegis/actions';
 import type { CdpError, PerceptionPayload } from '@aegis/perception';
 import { isErr, type Result } from '@aegis/shared';
 import { assign, fromPromise, setup } from 'xstate';
 
+import { identitySanitize, type SanitizeText } from '../sanitize';
 import { buildConfirmationRequest, type ConfirmationRequest } from './confirmation';
 import type { AgentError } from './errors';
 import { summarizeRunOutcome } from './run-summary';
@@ -97,8 +98,11 @@ export type AgentLoopEvent =
 /**
  * Builds the agent loop state machine (`docs/DESIGN.md` §5), closing over `services`
  * (planner/navigator/verifier/policy — injected so the machine stays pure and testable
- * with mocks) and `executorContext` (the live `CdpSession` + `TabManager` perception and
- * actions run against). Call once per task; `createActor` a new instance per run.
+ * with mocks), `executorContext` (the live `CdpSession` + `TabManager` perception and
+ * actions run against), and `toolRegistry` (needed to describe a pending tool call's
+ * source/description for the confirmation preview, #90 — the same registry `run-manager.ts`
+ * already holds for `buildTraceStep`). Call once per task; `createActor` a new instance
+ * per run.
  *
  * Every invoked actor forwards its own `signal` (an `AbortSignal` XState ties to that
  * invocation's lifetime) into the corresponding service call, so a service that honors
@@ -107,7 +111,12 @@ export type AgentLoopEvent =
  * handled as a normal event on every active state and so always takes effect immediately
  * regardless of what the current step is doing (`docs/adr/0008-loop-guardrails.md`).
  */
-export function createAgentLoopMachine(services: LoopServices, executorContext: ExecutorContext) {
+export function createAgentLoopMachine(
+  services: LoopServices,
+  executorContext: ExecutorContext,
+  toolRegistry: ToolRegistry,
+  sanitize: SanitizeText = identitySanitize,
+) {
   return setup({
     types: {
       context: {} as AgentLoopContext,
@@ -403,8 +412,11 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
               actions: assign({
                 pendingConfirmation: ({ context }) =>
                   buildConfirmationRequest(
+                    context.proposedToolCalls,
                     context.proposedActions,
+                    toolRegistry,
                     context.perception,
+                    sanitize,
                     context.policyCheckReason,
                   ),
               }),
@@ -440,8 +452,11 @@ export function createAgentLoopMachine(services: LoopServices, executorContext: 
               proposedToolCalls: ({ event }) => event.actions.map(actionToToolCall),
               pendingConfirmation: ({ context, event }) =>
                 buildConfirmationRequest(
+                  event.actions.map(actionToToolCall),
                   event.actions,
+                  toolRegistry,
                   context.perception,
+                  sanitize,
                   context.pendingConfirmation?.reason,
                 ),
             }),

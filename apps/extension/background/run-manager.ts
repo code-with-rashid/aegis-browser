@@ -184,7 +184,12 @@ export function createRunManager(
     await persistTrace();
     broadcast({ type: 'TRACE_SNAPSHOT', steps: [...trace] });
 
-    const machine = createAgentLoopMachine(built.services, built.executorContext);
+    const machine = createAgentLoopMachine(
+      built.services,
+      built.executorContext,
+      built.toolRegistry,
+      sanitizePageContent,
+    );
     const actor = createActor(machine, { input: { task, tabId } });
     activeActor = actor;
     attachLifecycle(actor, () => built.detach(), built.toolRegistry);
@@ -270,7 +275,12 @@ export function createRunManager(
         return;
       }
 
-      const machine = createAgentLoopMachine(built.services, built.executorContext);
+      const machine = createAgentLoopMachine(
+        built.services,
+        built.executorContext,
+        built.toolRegistry,
+        sanitizePageContent,
+      );
       const actor = createActor(machine, {
         input: { task, tabId },
         snapshot: hydrateResult.value as Snapshot<unknown>,

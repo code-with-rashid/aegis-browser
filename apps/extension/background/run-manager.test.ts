@@ -550,7 +550,11 @@ describe('createRunManager', () => {
 
     it('clears an already-terminal persisted snapshot instead of resuming it', async () => {
       const storage = createMemoryStorage();
-      const machine = createAgentLoopMachine(mockServices(), fakeExecutorContext(1));
+      const machine = createAgentLoopMachine(
+        mockServices(),
+        fakeExecutorContext(1),
+        createDefaultToolRegistry(),
+      );
       const actor = createActor(machine, { input: { task: 'Buy oat milk', tabId: 1 } });
       const stopPersisting = persistAgentLoopOnTransition(actor, storage);
       actor.start();
@@ -570,7 +574,11 @@ describe('createRunManager', () => {
         // eslint-disable-next-line @typescript-eslint/no-empty-function -- deliberately never resolves
         perceive: () => new Promise(() => {}),
       });
-      const machine = createAgentLoopMachine(services, fakeExecutorContext(1));
+      const machine = createAgentLoopMachine(
+        services,
+        fakeExecutorContext(1),
+        createDefaultToolRegistry(),
+      );
       const actor = createActor(machine, { input: { task: 'Buy oat milk', tabId: 1 } });
       const stopPersisting = persistAgentLoopOnTransition(actor, storage);
       actor.start();

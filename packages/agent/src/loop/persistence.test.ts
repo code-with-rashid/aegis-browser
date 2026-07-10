@@ -1,4 +1,8 @@
-import { createFakeTabManager, type ExecutorContext } from '@aegis/actions';
+import {
+  createDefaultToolRegistry,
+  createFakeTabManager,
+  type ExecutorContext,
+} from '@aegis/actions';
 import { createFakeCdp, type PerceptionPayload } from '@aegis/perception';
 import { createMemoryStorage, isOk, ok } from '@aegis/shared';
 import { createActor, waitFor, type Snapshot } from 'xstate';
@@ -50,7 +54,11 @@ describe('agent loop persistence', () => {
   it('persists a snapshot on every transition, hydratable into a fresh actor', async () => {
     const storage = createMemoryStorage();
     const services = mockServices();
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Delete account', tabId: 1 } });
 
     const stopPersisting = persistAgentLoopOnTransition(actor, storage);
@@ -65,7 +73,11 @@ describe('agent loop persistence', () => {
       throw new Error('expected a persisted snapshot');
     }
 
-    const rehydratedMachine = createAgentLoopMachine(services, testExecutorContext());
+    const rehydratedMachine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const rehydratedActor = createActor(rehydratedMachine, {
       input: { task: 'Delete account', tabId: 1 },
       snapshot: hydrated.value as Snapshot<unknown>,
@@ -84,7 +96,11 @@ describe('agent loop persistence', () => {
   it('clearAgentLoopSnapshot removes the persisted snapshot', async () => {
     const storage = createMemoryStorage();
     const services = mockServices();
-    const machine = createAgentLoopMachine(services, testExecutorContext());
+    const machine = createAgentLoopMachine(
+      services,
+      testExecutorContext(),
+      createDefaultToolRegistry(),
+    );
     const actor = createActor(machine, { input: { task: 'Delete account', tabId: 1 } });
 
     const stopPersisting = persistAgentLoopOnTransition(actor, storage);

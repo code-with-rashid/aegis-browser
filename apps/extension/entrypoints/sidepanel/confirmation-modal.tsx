@@ -114,8 +114,15 @@ export function ConfirmationModal({
 
       {!editing ? (
         <ul className="mt-3 space-y-1 text-sm">
-          {request.preview.map((line, index) => (
-            <li key={index}>{line}</li>
+          {request.toolCalls.map((toolCall, index) => (
+            <li key={index} className="flex items-baseline gap-2">
+              {toolCall.source !== undefined && toolCall.source !== 'browser' ? (
+                <span className="rounded bg-muted px-1 text-xs uppercase text-muted-foreground">
+                  {toolCall.source}
+                </span>
+              ) : null}
+              <span>{toolCall.description}</span>
+            </li>
           ))}
         </ul>
       ) : (
@@ -177,6 +184,7 @@ export function ConfirmationModal({
             </Button>
             <Button
               variant="secondary"
+              disabled={request.actions.length === 0}
               onClick={() => {
                 setEditing(true);
               }}
