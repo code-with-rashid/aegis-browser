@@ -20,6 +20,7 @@
     "@aegis/actions": "workspace:*",
     "@aegis/agent": "workspace:*",
     "@aegis/llm": "workspace:*",
+    "@aegis/mcp": "workspace:*",
     "@aegis/perception": "workspace:*",
     "@aegis/security": "workspace:*",
     "@aegis/shared": "workspace:*",
