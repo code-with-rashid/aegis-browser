@@ -12,6 +12,13 @@ import type { BackgroundToPanelMessage, PanelToBackgroundMessage } from '../../m
 
 export type RunStatus = 'idle' | LoopRunOutcome;
 
+/** Whether the most recently completed run has been saved as a reusable workflow (#121) — reset to `idle` the moment a new run starts. */
+export type SaveWorkflowStatus =
+  | { readonly status: 'idle' }
+  | { readonly status: 'saving' }
+  | { readonly status: 'saved'; readonly workflowId: string }
+  | { readonly status: 'error'; readonly message: string };
+
 export interface RunState {
   readonly status: RunStatus;
   readonly task: string;
@@ -24,6 +31,7 @@ export interface RunState {
   readonly trace: readonly TraceStep[];
   /** Set exactly while the run is suspended awaiting a human decision (#27) — the confirmation gate modal renders whenever this is defined. */
   readonly pendingConfirmation: ConfirmationRequest | undefined;
+  readonly saveWorkflowStatus: SaveWorkflowStatus;
   /** Function-typed properties, not method shorthand — selecting one out of the store (`useRunStore((s) => s.startRun)`) must not trip `@typescript-eslint/unbound-method`. */
   readonly setTask: (task: string) => void;
   readonly startRun: (tabId: number) => void;
@@ -33,6 +41,7 @@ export interface RunState {
   readonly approveConfirmation: () => void;
   readonly rejectConfirmation: () => void;
   readonly editConfirmation: (actions: readonly Action[]) => void;
+  readonly saveAsWorkflow: (name: string) => void;
 }
 
 const INITIAL_RUN_FIELDS: Pick<
@@ -67,7 +76,7 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
     port.onMessage((message: BackgroundToPanelMessage) => {
       switch (message.type) {
         case 'RUN_IDLE':
-          set({ ...INITIAL_RUN_FIELDS, trace: [] });
+          set({ ...INITIAL_RUN_FIELDS, trace: [], saveWorkflowStatus: { status: 'idle' } });
           return;
         case 'RUN_STATUS':
           set({
@@ -90,6 +99,12 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
         case 'TRACE_STEP':
           set((state) => ({ trace: [...state.trace, message.step] }));
           return;
+        case 'WORKFLOW_SAVED':
+          set({ saveWorkflowStatus: { status: 'saved', workflowId: message.workflowId } });
+          return;
+        case 'SAVE_AS_WORKFLOW_FAILED':
+          set({ saveWorkflowStatus: { status: 'error', message: message.reason } });
+          return;
         default:
           return;
       }
@@ -99,6 +114,7 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
       ...INITIAL_RUN_FIELDS,
       task: '',
       trace: [],
+      saveWorkflowStatus: { status: 'idle' },
 
       setTask(task: string) {
         set({ task });
@@ -106,6 +122,7 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
 
       startRun(tabId: number) {
         const { task } = get();
+        set({ saveWorkflowStatus: { status: 'idle' } });
         port.send({ type: 'START_RUN', task, tabId });
       },
 
@@ -131,6 +148,11 @@ export function createRunStore(port: RunBridgePort): UseBoundStore<StoreApi<RunS
 
       editConfirmation(actions: readonly Action[]) {
         port.send({ type: 'EDIT_RUN', actions });
+      },
+
+      saveAsWorkflow(name: string) {
+        set({ saveWorkflowStatus: { status: 'saving' } });
+        port.send({ type: 'SAVE_AS_WORKFLOW', name });
       },
     };
   });

@@ -17,8 +17,9 @@ import {
   type Result,
   type StoragePort,
 } from '@aegis/shared';
+import { createWorkflowStore } from '@aegis/workflows';
 import { createActor, waitFor } from 'xstate';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createFakePortPair } from '../messaging/fake-port';
 import type { BackgroundToPanelMessage, PanelToBackgroundMessage } from '../messaging/protocol';
@@ -535,6 +536,183 @@ describe('createRunManager', () => {
 
       const resetSnapshot = received.find((m) => m.type === 'TRACE_SNAPSHOT');
       expect(resetSnapshot?.type === 'TRACE_SNAPSHOT' && resetSnapshot.steps).toEqual([]);
+    });
+  });
+
+  describe('save as workflow (#121)', () => {
+    const globalWithChrome = globalThis as unknown as { chrome?: unknown };
+
+    function completedClickResult() {
+      return {
+        kind: 'completed' as const,
+        results: [
+          {
+            toolCall: {
+              toolId: 'browser.click',
+              args: { type: 'click' as const, ref: toElementRef('ax:1') },
+            },
+            attempt: 1,
+            outcome: { ok: true as const, value: { kind: 'click' } },
+          },
+        ],
+      };
+    }
+
+    beforeEach(() => {
+      globalWithChrome.chrome = {
+        tabs: { get: vi.fn().mockResolvedValue({ url: 'https://shop.example.com/cart' }) },
+      };
+    });
+
+    afterEach(() => {
+      delete globalWithChrome.chrome;
+    });
+
+    it("persists a workflow from the completed run's recorded steps", async () => {
+      const workflowStorage = createMemoryStorage();
+      const manager = createRunManager(
+        createMemoryStorage(),
+        workflowStorage,
+        fakeBuildLoop({ act: () => Promise.resolve(completedClickResult()) }),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'Buy oat milk', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'done',
+      );
+
+      panelPort.send({ type: 'SAVE_AS_WORKFLOW', name: 'Buy oat milk workflow' });
+      await waitForMessage(received, (m) => m.type === 'WORKFLOW_SAVED');
+
+      const saved = received.find((m) => m.type === 'WORKFLOW_SAVED');
+      if (saved?.type !== 'WORKFLOW_SAVED') {
+        throw new Error('expected a WORKFLOW_SAVED message');
+      }
+      const workflowStore = createWorkflowStore(workflowStorage);
+      const workflow = await workflowStore.getWorkflow(saved.workflowId as never);
+      expect(workflow.ok && workflow.value?.name).toBe('Buy oat milk workflow');
+      expect(workflow.ok && workflow.value?.origin).toBe('https://shop.example.com');
+      expect(workflow.ok && (workflow.value?.steps.length ?? 0) > 0).toBe(true);
+    });
+
+    it('fails with a reason when no completed run is available to save yet', async () => {
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop(),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'SAVE_AS_WORKFLOW', name: 'Anything' });
+      await waitForMessage(received, (m) => m.type === 'SAVE_AS_WORKFLOW_FAILED');
+
+      expect(received).toContainEqual({
+        type: 'SAVE_AS_WORKFLOW_FAILED',
+        reason: 'No completed run is available to save yet',
+      });
+    });
+
+    it('fails with a reason when the completed run recorded no steps', async () => {
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop(),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'Buy oat milk', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'done',
+      );
+
+      panelPort.send({ type: 'SAVE_AS_WORKFLOW', name: 'Anything' });
+      await waitForMessage(received, (m) => m.type === 'SAVE_AS_WORKFLOW_FAILED');
+
+      expect(received).toContainEqual({
+        type: 'SAVE_AS_WORKFLOW_FAILED',
+        reason: 'This run recorded no steps',
+      });
+    });
+
+    it('rejects a blank name without persisting anything', async () => {
+      const manager = createRunManager(
+        createMemoryStorage(),
+        createMemoryStorage(),
+        fakeBuildLoop({ act: () => Promise.resolve(completedClickResult()) }),
+      );
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'Buy oat milk', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'done',
+      );
+
+      panelPort.send({ type: 'SAVE_AS_WORKFLOW', name: '   ' });
+      await waitForMessage(received, (m) => m.type === 'SAVE_AS_WORKFLOW_FAILED');
+
+      expect(received).toContainEqual({ type: 'SAVE_AS_WORKFLOW_FAILED', reason: 'Enter a name' });
+    });
+
+    it('clears the completed recording the moment a new run starts', async () => {
+      let callCount = 0;
+      const buildLoop = (
+        storage: StoragePort,
+        tabId: number,
+      ): Promise<Result<BuiltLoop, BuildLoopServicesError>> => {
+        callCount += 1;
+        if (callCount === 1) {
+          return fakeBuildLoop({ act: () => Promise.resolve(completedClickResult()) })(
+            storage,
+            tabId,
+          );
+        }
+        return fakeBuildLoop({
+          // eslint-disable-next-line @typescript-eslint/no-empty-function -- deliberately never resolves
+          perceive: () => new Promise(() => {}),
+        })(storage, tabId);
+      };
+      const manager = createRunManager(createMemoryStorage(), createMemoryStorage(), buildLoop);
+      const { panelPort, backgroundPort } = panelPorts();
+      const received: BackgroundToPanelMessage[] = [];
+      panelPort.onMessage((message) => received.push(message));
+      manager.registerPort(backgroundPort);
+
+      panelPort.send({ type: 'START_RUN', task: 'First task', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'done',
+      );
+
+      received.length = 0;
+      panelPort.send({ type: 'START_RUN', task: 'Second task', tabId: 1 });
+      await waitForMessage(
+        received,
+        (m) => m.type === 'RUN_STATUS' && m.summary.outcome === 'active',
+      );
+
+      panelPort.send({ type: 'SAVE_AS_WORKFLOW', name: 'Too late' });
+      await waitForMessage(received, (m) => m.type === 'SAVE_AS_WORKFLOW_FAILED');
+
+      expect(received).toContainEqual({
+        type: 'SAVE_AS_WORKFLOW_FAILED',
+        reason: 'No completed run is available to save yet',
+      });
     });
   });
 

@@ -3,6 +3,67 @@
 All notable changes to this project are documented in this file. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] — 2026-07-11
+
+Phase 3: record→compile self-healing workflows. Every milestone in `PROGRESS.md`
+(M13–M17, issues #108–#121) is implemented, gated, and tested. Full rationale for every
+real design decision is in `docs/adr/` (ADRs 0042–0055).
+
+### Added
+
+- **A new `@aegis/workflows` package** — a `Workflow` is a versioned, parameterized,
+  ordered sequence of recorded tool calls plus a `RunPolicy` (what it's pre-authorized to
+  do with no one watching). Depends only on `@aegis/agent`/`@aegis/actions`/
+  `@aegis/perception`/`@aegis/security`/`@aegis/shared`.
+- **Record a completed run as a workflow** — the side panel gains a "Save as workflow"
+  field once a run reaches Done; the exact recorded steps (what was clicked, typed, or
+  extracted) become a new, reusable workflow with one click.
+- **Deterministic replay with zero LLM calls** — a saved workflow re-runs its recorded
+  steps by dispatching each straight through the same tool-call mechanism every tool
+  source already uses, no Planner/Navigator/Verifier involved at all.
+- **Self-heal repairs one broken step at a time** — when a step's target can't be found
+  (the site changed since it was recorded), the same Navigator the live loop uses proposes
+  a fix for just that step, gated by risk before it ever executes: a state-changing fix
+  always needs a human's confirmation when attended, and always hard-stops rather than
+  auto-applying when unattended — self-heal can retarget a workflow, never expand what
+  it's authorized to do.
+- **A background run engine** drives a real, non-active managed tab inside the service
+  worker, checkpointing progress after every step so an MV3 eviction mid-run loses at
+  most one step in flight; a `chrome.alarms`-based scheduler (every-N-minutes or daily)
+  triggers a run with no side panel or active tab ever needed.
+- **"Safe autonomy" guardrails for unattended runs** — a workflow's own origin, step
+  count, and each recorded step's tool id/risk are checked against its `RunPolicy` before
+  anything executes; every `‹secret:name›` placeholder resolves through the vault first,
+  hard-stopping (never leaking the raw placeholder) if it can't; a blocked run notifies
+  the user via `chrome.notifications`.
+- **Options — Workflows tab** — list saved workflows, run one on demand with its own
+  parameter values, view a full step-by-step run history, and a dedicated builder to
+  view/reorder/delete steps, add/remove/edit params of either kind (a plain overridable
+  value or a vault-backed secret), edit the `RunPolicy`, and enable/configure scheduling.
+- **A workflow eval and a dedicated security suite** — `pnpm eval` now measures self-heal
+  end-to-end (a clean replay costs zero model calls; a healed replay after a simulated
+  site change completes via one bounded Navigator call, never a full re-plan); a new
+  Playwright E2E suite proves an unattended background run can't be hijacked into an
+  unauthorized state change by injected page content, and that a step outside its
+  `RunPolicy` allow-list never executes even when its target genuinely exists.
+
+### Fixed (found while building Phase 3, not regressions from v0.2.0)
+
+- `createRunRecorder` (#109) was built as a pure, tested library function but never
+  actually wired into the live agent loop — there was no way, anywhere in the shipped UI,
+  to turn a completed run into a workflow at all, silently blocking the entire feature for
+  a real user despite #118/#119's management UI already existing. Fixed by subscribing
+  `background/run-manager.ts` to the same trace-building transition edge and adding a
+  real "Save as workflow" action to the side panel. (`docs/adr/0055`)
+- Writing the workflow security suite (#120) surfaced a pre-existing gap in
+  `@aegis/agent`'s Navigator prompt builder: it sanitizes free-text page content and a
+  tool's own description, but never an individual page element's own accessible name —
+  ordinary visible page text reaches the Navigator's prompt completely raw, for the live
+  loop as much as for a workflow heal. Not fixed (a `packages/agent` concern spanning the
+  whole product, out of scope for a workflows issue) — documented for a future issue; the
+  structural safety net (`gateHeal`'s unattended state-changing hard-stop) never depended
+  on catching this to hold. (`docs/adr/0054`)
+
 ## [0.2.0] — 2026-07-10
 
 Phase 2: MCP + WebMCP tool calling. Every milestone in `PROGRESS.md` (M8–M12, issues

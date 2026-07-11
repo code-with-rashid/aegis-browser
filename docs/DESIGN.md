@@ -39,8 +39,8 @@ Nanobrowser proved the demand for a free, private, BYOK browser agent — but it
 
 - No CAPTCHA solving or bot-detection evasion arms race — **human handoff** instead.
 - No autonomous purchases/sends without confirmation.
-- No headless / scheduled / background runs (Phase 3).
-- No record→replay workflow compiler (Phase 3).
+- ~~No headless / scheduled / background runs (Phase 3).~~ Shipped in v0.3.0 — see §17.
+- ~~No record→replay workflow compiler (Phase 3).~~ Shipped in v0.3.0 — see §17.
 - ~~No MCP/WebMCP tool ecosystem yet (Phase 2 — but the interfaces are designed for it
   now).~~ Shipped in v0.2.0 — see §16.
 - No cloud sync, no accounts, no telemetry beyond opt-in local-only diagnostics.
@@ -378,14 +378,14 @@ aegis/
 
 ## 13. Build plan / milestones
 
-| Phase                        | Deliverable                                                                                                    | Exit criteria                                                                   |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| **0 — Spike** (throwaway)    | Drive one real site end-to-end via CDP AX-tree perception + AI SDK tool-calling with a hard human-confirm gate | Proves the perception→action→confirm loop works; informs the real interfaces    |
-| **1 — Core loop**            | WXT scaffold, XState loop, Planner/Navigator, perception pipeline, action executors                            | Completes read-only use cases (1,2,4) reliably                                  |
-| **2 — Security core**        | Policy engine, confirmation gate, alignment critic, content trust-tagging, secret vault                        | Use case 3 gated correctly; passes baseline injection suite                     |
-| **3 — Trust UX + evals**     | Action trace, permissions panel, vault UI, eval harness wired to CI                                            | Beats Nanobrowser baseline on the eval set; ship v0.1 (Chrome+Edge)             |
-| **Phase 2 — shipped v0.2.0** | MCP client + WebMCP fast-path, tool-call-aware trace/confirmation, tool-use evals + security suite             | Agent calls declared MCP/WebMCP tool APIs, gated identically to browser actions |
-| **Phase 3 (post-MVP)**       | Record→compile self-healing workflows + scheduled runs                                                         | Reusable, deterministic automations                                             |
+| Phase                        | Deliverable                                                                                                       | Exit criteria                                                                         |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **0 — Spike** (throwaway)    | Drive one real site end-to-end via CDP AX-tree perception + AI SDK tool-calling with a hard human-confirm gate    | Proves the perception→action→confirm loop works; informs the real interfaces          |
+| **1 — Core loop**            | WXT scaffold, XState loop, Planner/Navigator, perception pipeline, action executors                               | Completes read-only use cases (1,2,4) reliably                                        |
+| **2 — Security core**        | Policy engine, confirmation gate, alignment critic, content trust-tagging, secret vault                           | Use case 3 gated correctly; passes baseline injection suite                           |
+| **3 — Trust UX + evals**     | Action trace, permissions panel, vault UI, eval harness wired to CI                                               | Beats Nanobrowser baseline on the eval set; ship v0.1 (Chrome+Edge)                   |
+| **Phase 2 — shipped v0.2.0** | MCP client + WebMCP fast-path, tool-call-aware trace/confirmation, tool-use evals + security suite                | Agent calls declared MCP/WebMCP tool APIs, gated identically to browser actions       |
+| **Phase 3 — shipped v0.3.0** | Record→compile self-healing workflows, RunPolicy-gated unattended/scheduled runs, workflow evals + security suite | Reusable, deterministic automations that heal and can safely run with no one watching |
 
 ---
 
@@ -404,19 +404,20 @@ aegis/
 
 Every core choice ties to a specific, verified Nanobrowser weakness:
 
-| Nanobrowser weakness                                   | Aegis answer                                                   |
-| ------------------------------------------------------ | -------------------------------------------------------------- |
-| Index-only perception (misses canvas/icons/shadow DOM) | Hybrid AX-tree + DOM + vision fallback with stable refs        |
-| `extractContent` disabled → token blow-up              | Re-enabled, budgeted extraction + history compression          |
-| Structured-output parsing breaks across providers      | Zod + `generateObject` + JSON-repair fallback                  |
-| "Lightweight" guardrails vs. prompt injection          | 5-layer security core, on by default                           |
-| Credentials flow into the prompt                       | WebCrypto vault + native fill; model never sees secrets        |
-| No verification → compounding error / loops            | Verifier step + stall detector                                 |
-| No human gate on risky actions                         | Mandatory confirmation for all state-changing actions          |
-| Chrome/Edge only                                       | WXT cross-browser                                              |
-| Reliability is unmeasured ("use a smarter model")      | Eval harness gates every release                               |
-| No tools / MCP / API                                   | MCP client + WebMCP fast-path, shipped v0.2.0 (Phase 2)        |
-| Single-maintainer, stalling                            | Small typed core + early evals so others can contribute safely |
+| Nanobrowser weakness                                   | Aegis answer                                                                                               |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Index-only perception (misses canvas/icons/shadow DOM) | Hybrid AX-tree + DOM + vision fallback with stable refs                                                    |
+| `extractContent` disabled → token blow-up              | Re-enabled, budgeted extraction + history compression                                                      |
+| Structured-output parsing breaks across providers      | Zod + `generateObject` + JSON-repair fallback                                                              |
+| "Lightweight" guardrails vs. prompt injection          | 5-layer security core, on by default                                                                       |
+| Credentials flow into the prompt                       | WebCrypto vault + native fill; model never sees secrets                                                    |
+| No verification → compounding error / loops            | Verifier step + stall detector                                                                             |
+| No human gate on risky actions                         | Mandatory confirmation for all state-changing actions                                                      |
+| Chrome/Edge only                                       | WXT cross-browser                                                                                          |
+| Reliability is unmeasured ("use a smarter model")      | Eval harness gates every release                                                                           |
+| No tools / MCP / API                                   | MCP client + WebMCP fast-path, shipped v0.2.0 (Phase 2)                                                    |
+| Every run re-plans from scratch, nothing is reusable   | Record→compile self-healing workflows, RunPolicy-gated unattended/scheduled runs, shipped v0.3.0 (Phase 3) |
+| Single-maintainer, stalling                            | Small typed core + early evals so others can contribute safely                                             |
 
 ---
 
@@ -470,8 +471,67 @@ inputSchema, risk, execute}`. The Navigator's decision became source-agnostic: a
 
 ---
 
+## 17. Phase 3 — record→compile self-healing workflows (shipped v0.3.0)
+
+Built as 14 issues (#108–#121, `PROGRESS.md`'s M13–M17), all documented in `docs/adr/`
+(ADRs 0042–0055), in a new `@aegis/workflows` package (depends only on `@aegis/agent`/
+`@aegis/actions`/`@aegis/perception`/`@aegis/security`/`@aegis/shared` — none of those
+packages know it exists). Summary of what actually shipped:
+
+- **A `Workflow` is a versioned, parameterized, ordered sequence of recorded tool calls**
+  plus a `RunPolicy` — what it's pre-authorized to do with no one watching. Recording
+  reuses the live agent loop's own per-cycle trace-building hook (`buildWorkflowSteps`
+  mirrors `@aegis/agent`'s `buildTraceStep`), so a completed task can be saved as a
+  workflow with no separate "recording mode" to build.
+- **Deterministic replay makes zero LLM calls.** `runWorkflow` binds a run's parameter
+  values into the recorded steps and dispatches each straight through the same
+  `ToolRegistry.call` mechanism every tool source already uses — no Planner, no
+  Navigator, no Verifier. Re-targeting a step for the current page tries the recorded
+  `ref` first, then a resilient `selector`/`role`/`name` captured at record time.
+- **Self-heal repairs one broken step at a time**, not a full re-plan: when a step's
+  target can't be found, `healStep` asks the _same_ `NavigatorService` the live loop uses
+  to propose a fix for just that step, gated by risk before it ever executes — a
+  state-changing fix always needs a human's confirmation when attended, and always
+  hard-stops rather than auto-applying when unattended, regardless of what the
+  workflow's own `RunPolicy.allowStateChanging` authorizes for its _recorded_ steps.
+  Healing can retarget a workflow; it can never expand what the workflow is authorized to
+  do.
+- **A background run engine drives a real, non-active managed tab** inside the service
+  worker, checkpointing progress after every step so an MV3 eviction mid-run loses at
+  most the one step in flight — and a `chrome.alarms`-based scheduler (`interval` or
+  `daily`, deliberately not a full cron grammar) triggers a background run with no side
+  panel or active tab ever needed.
+- **"Safe autonomy," not just "runs unattended."** Before any step executes, a workflow's
+  own `origin`, step count, and each recorded step's tool id/risk are checked against its
+  `RunPolicy`; every `‹secret:name›` placeholder anywhere in a step's args resolves
+  through the vault before it executes, and an unresolvable secret (a locked vault, most
+  commonly, since nothing can share an _unlocked_ vault into a background-only run) hard-
+  stops rather than ever sending the raw placeholder as if it were the credential. A
+  blocked run notifies the user via `chrome.notifications`.
+- **The options page gained a "Workflows" tab**: list saved workflows, run one on demand
+  with its own parameter values, view a full step-by-step run history, and a dedicated
+  builder to view/reorder/delete steps, add/remove/edit params, edit the `RunPolicy`, and
+  enable/configure scheduling.
+- **A workflow eval and a dedicated security suite prove the above holds, not just that
+  it compiles.** `pnpm eval` now measures self-heal end-to-end: a clean replay against
+  the exact recorded page costs zero model calls; a replay against a page that changed
+  since recording heals via one bounded Navigator call, never a full re-plan. A new
+  Playwright E2E suite proves an unattended background run can't be hijacked into an
+  unauthorized state change by injected page content, and that a step outside its
+  `RunPolicy` allow-list never executes even when its target genuinely exists.
+- **Not built in Phase 3**: a workflow's edit history is `version`/`updatedAt` only — no
+  snapshot timeline or diff/undo view across edits (only a self-heal's own before/after
+  is ever visible, via `HealDiff`). Writing the workflow evals + security suite also
+  surfaced a real, pre-existing gap left deliberately unfixed (out of scope for a
+  "workflows" issue): `@aegis/agent`'s Navigator prompt builder sanitizes free-text page
+  content and a tool's own description, but never an individual page element's own
+  accessible name — a future issue's job (ADR 0054).
+
+---
+
 _End of design draft. Phases "0 — Spike" through "3 — Trust UX + evals" shipped as
-v0.1.0; Phase 2 (§16) shipped as v0.2.0. See `PROGRESS.md`'s milestone checklist and ADR
-log for the 93 issues that implemented this design, including every place implementation
-surfaced a real decision this draft didn't anticipate. Phase 3 (record→compile workflows)
-remains post-MVP, not yet started._
+v0.1.0; Phase 2 (§16) shipped as v0.2.0; Phase 3 (§17) shipped as v0.3.0. See
+`PROGRESS.md`'s milestone checklist and ADR log for the 121 issues that implemented this
+design, including every place implementation surfaced a real decision this draft didn't
+anticipate. Phase 4 (Firefox support, store distribution, team/workflow sharing) remains
+post-MVP, not yet started — see `PHASE_3_PROMPT.md`'s own closing note._

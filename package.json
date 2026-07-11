@@ -1,7 +1,7 @@
 {
   "name": "aegis-browser",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local-first, BYOK browser-automation agent for Chrome & Edge (MV3).",
   "license": "MIT",
   "packageManager": "pnpm@11.6.0",

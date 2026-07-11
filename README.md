@@ -15,11 +15,12 @@ Aegis lets you drive your own browser with an LLM agent — clicking, filling fo
 
 ## Status
 
-**v0.2.0.** All of M0–M12 (`PROGRESS.md`'s milestone checklist) is implemented: the
+**v0.3.0.** All of M0–M17 (`PROGRESS.md`'s milestone checklist) is implemented: the
 perception/action/agent-loop core, the security core (policy engine, confirmation gate,
 alignment critic, secret vault), the side panel and options UI, MCP + WebMCP tool calling
-(Phase 2), and end-to-end/reliability/security test suites running in CI. Phase 3
-(record→compile workflows) is designed for but not yet built — see `docs/DESIGN.md`.
+(Phase 2), record→compile self-healing workflows with RunPolicy-gated unattended/scheduled
+runs (Phase 3), and end-to-end/reliability/security test suites running in CI — see
+`docs/DESIGN.md`.
 
 ## Install (load unpacked)
 
@@ -78,6 +79,8 @@ Aegis never bundles a model or a backend — you configure your own provider bef
    action before anything runs. Nothing state-changing ever executes without this gate.
 5. **Pause**/**Resume**/**Stop** are available at any time. A run's trace and state survive
    a side-panel close and a service-worker restart.
+6. Once a run reaches **Done**, a **Save as workflow** field appears — name it and save to
+   turn what just happened into a reusable, deterministic **Workflow** (see below).
 
 ## MCP & WebMCP tools
 
@@ -111,6 +114,33 @@ more reliable than driving a UI, when a tool covers what you asked for.
 Once a server's tools are allowed, just describe the task in the side panel as usual —
 Aegis calls the tool directly when it covers the goal, with no other setup needed.
 
+## Workflows
+
+A one-off task doesn't have to stay one-off — record it once, then replay it forever with
+**no LLM calls at all**, self-healing the one step that breaks if the site changes.
+
+1. **Record**: complete any task in the side panel as usual. Once it reaches **Done**,
+   type a name into **Save as workflow** and click it — the exact steps that just ran
+   (what was clicked, typed, or extracted) are saved as a new **Workflow**.
+2. **Manage**: open **Options → Workflows** to see every saved workflow. **Run** starts it
+   again on demand (fill in any params it takes first); **History** shows every past run's
+   status and a full step-by-step trace; **Delete** removes it.
+3. **Edit**: click a workflow's **Edit** to view/reorder/delete its recorded steps, add or
+   remove parameters (a param can be a plain overridable value, or a `secret` reference
+   resolved from the vault — never a value baked into the workflow itself), edit its
+   **RunPolicy** (what it's allowed to do with no one watching), and enable scheduling.
+4. **Schedule**: in the same editor, turn on **Enable scheduling** and choose **Every N
+   minutes** or **Daily at a time** — the workflow then runs on its own, on a
+   non-active managed tab, with no side panel or foreground tab needed.
+5. **Unattended safety.** A workflow only ever does, unattended, what its own `RunPolicy`
+   pre-authorizes: an allow-list of tool ids/origins, whether a state-changing step (a
+   purchase, a delete, a submit) may run with no one to confirm it, and optional step/
+   daily-run caps. Self-heal can retarget a broken step to keep the workflow working, but
+   it can **never** expand what the workflow is authorized to do — a healed fix that would
+   be state-changing always stops the run and asks (if attended) or hard-stops outright
+   with a notification (if unattended), regardless of what the recorded steps themselves
+   are pre-authorized for.
+
 ## Security model
 
 - Page content is always treated as **untrusted data**, never as instructions — sanitized
@@ -126,11 +156,18 @@ Aegis calls the tool directly when it covers the goal, with no other setup neede
 - **Every tool call — MCP, WebMCP, or a browser action — passes through the identical
   gate**: risk classification, per-site policy, alignment critic, confirmation. No tool
   is ever auto-trusted; a newly discovered MCP/WebMCP tool starts denied until reviewed.
+- **A workflow's `RunPolicy` is a pre-authorization, never something a run or a self-heal
+  can expand.** A healed (LLM-proposed) fix is always held to a stricter bar than a
+  recorded step: a state-changing heal always needs a human's confirmation when attended,
+  and always hard-stops — never auto-applies — when unattended, no matter what the
+  workflow itself is authorized to do unattended for its own recorded steps.
 - All of the above is exercised by an end-to-end security test suite (indirect
-  prompt-injection fixtures, a "compromised navigator" worst case, and hostile tool
-  descriptions attempting the same) that runs in CI — see `apps/extension/README.md`'s
+  prompt-injection fixtures, a "compromised navigator" worst case, hostile tool
+  descriptions attempting the same, and an unattended background workflow run facing
+  the same worst-case injection) that runs in CI — see `apps/extension/README.md`'s
   E2E/security sections and `docs/adr/0022-security-test-suite.md`/
-  `docs/adr/0040-tool-use-evals-and-security-suite.md`.
+  `docs/adr/0040-tool-use-evals-and-security-suite.md`/
+  `docs/adr/0054-workflow-evals-security-suite.md`.
 
 ## Development
 

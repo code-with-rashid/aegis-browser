@@ -306,4 +306,73 @@ describe('createRunStore', () => {
 
     expect(received).toEqual([{ type: 'EDIT_RUN', actions: editedActions }]);
   });
+
+  describe('save as workflow (#121)', () => {
+    it('starts idle', () => {
+      const { a: panelPort } = panelAndBackgroundPorts();
+      const store = createRunStore(panelPort);
+
+      expect(store.getState().saveWorkflowStatus).toEqual({ status: 'idle' });
+    });
+
+    it('saveAsWorkflow marks saving and sends SAVE_AS_WORKFLOW with the given name', () => {
+      const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+      const store = createRunStore(panelPort);
+      const received: PanelToBackgroundMessage[] = [];
+      backgroundPort.onMessage((message) => received.push(message));
+
+      store.getState().saveAsWorkflow('Buy oat milk workflow');
+
+      expect(store.getState().saveWorkflowStatus).toEqual({ status: 'saving' });
+      expect(received).toEqual([{ type: 'SAVE_AS_WORKFLOW', name: 'Buy oat milk workflow' }]);
+    });
+
+    it('a WORKFLOW_SAVED message marks the save as succeeded with the new workflow id', () => {
+      const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+      const store = createRunStore(panelPort);
+
+      backgroundPort.send({ type: 'WORKFLOW_SAVED', workflowId: 'workflow-1' });
+
+      expect(store.getState().saveWorkflowStatus).toEqual({
+        status: 'saved',
+        workflowId: 'workflow-1',
+      });
+    });
+
+    it('a SAVE_AS_WORKFLOW_FAILED message surfaces the reason', () => {
+      const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+      const store = createRunStore(panelPort);
+
+      backgroundPort.send({ type: 'SAVE_AS_WORKFLOW_FAILED', reason: 'Enter a name' });
+
+      expect(store.getState().saveWorkflowStatus).toEqual({
+        status: 'error',
+        message: 'Enter a name',
+      });
+    });
+
+    it('starting a new run resets the save status back to idle', () => {
+      const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+      const store = createRunStore(panelPort);
+      backgroundPort.send({ type: 'WORKFLOW_SAVED', workflowId: 'workflow-1' });
+      expect(store.getState().saveWorkflowStatus).toEqual({
+        status: 'saved',
+        workflowId: 'workflow-1',
+      });
+
+      store.getState().startRun(7);
+
+      expect(store.getState().saveWorkflowStatus).toEqual({ status: 'idle' });
+    });
+
+    it('RUN_IDLE resets the save status back to idle', () => {
+      const { a: panelPort, b: backgroundPort } = panelAndBackgroundPorts();
+      const store = createRunStore(panelPort);
+      backgroundPort.send({ type: 'SAVE_AS_WORKFLOW_FAILED', reason: 'Enter a name' });
+
+      backgroundPort.send({ type: 'RUN_IDLE' });
+
+      expect(store.getState().saveWorkflowStatus).toEqual({ status: 'idle' });
+    });
+  });
 });

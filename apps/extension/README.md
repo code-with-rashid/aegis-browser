@@ -277,6 +277,99 @@ blocked by the alignment critic before confirmation — mirroring
 `injected-purchase-attempt.ts`'s worst-case-Navigator principle, just sourced from a
 tool's own description instead of page content.
 
+## Background run engine (#115)
+
+See [ADR 0049](../../docs/adr/0049-background-run-engine.md). `background/managed-tab.ts`'s
+`openManagedTab`/`closeManagedTab` open/close a real, non-active `chrome.tabs.create` tab —
+`chrome.debugger` attaches to any tab regardless of focus, so a background workflow run
+never needs the side panel open or the user's foreground tab. `background/
+background-run-manager.ts`'s `createBackgroundRunManager` reuses `build-loop-services.ts`'s
+`buildLoopServices` completely unchanged (the exact same `LoopServices`/CDP session/tool
+registry the live side-panel loop gets), wired instead into `@aegis/workflows`'
+`runWorkflowInBackground`, checkpointing progress via a new `WorkflowRunStore` and capping
+concurrent runs via `createRunConcurrencyLimiter`. `entrypoints/background.ts` calls
+`backgroundRunManager.initialize()` on startup to resume any run left `status: 'running'`
+when the service worker was last evicted.
+
+## Scheduler + triggers (#116)
+
+See [ADR 0050](../../docs/adr/0050-scheduler-triggers.md). `background/scheduler.ts`'s
+`createScheduler` wraps `@aegis/workflows`' `WorkflowScheduleStore`/`findDueSchedules`:
+`checkSchedules(now)` starts a background run for every currently-due schedule, called
+every minute by a new recurring `chrome.alarms` alarm (new `"alarms"` permission) wired in
+`entrypoints/background.ts`; `triggerNow(workflowId, values)` is the manual-trigger entry
+point the options page's "Run" action (#118) calls through the new workflow message-port
+bridge.
+
+## Unattended-mode guardrails (#117)
+
+See [ADR 0051](../../docs/adr/0051-unattended-mode-guardrails.md). No new UI — this
+issue's `apps/extension` footprint is `background/notify.ts`'s real `chrome.notifications.
+create` call (new `"notifications"` permission), fired from `background-run-manager.ts`'s
+`drive()` whenever a background run's final status is `hard_stopped`.
+
+## Options — Workflows tab: library, run, history (#118)
+
+See [ADR 0052](../../docs/adr/0052-workflow-library-ui.md). A fifth options tab,
+"Workflows" (`entrypoints/options/workflow-library-panel.tsx`), lists every saved
+`@aegis/workflows` `Workflow`: expand "Run" to fill in its params (if any) and start a
+background run, "History" to see its past runs' status and a full step-by-step trace
+(`workflow-run-trace.tsx` — a sibling of the side panel's `TraceList`, not a shared
+component, since a deterministic replay's `WorkflowStepResult` has no planner/navigator/
+verifier reasoning to show), or delete it outright. Starting a run is the first thing the
+options page has ever needed the background service worker for, so it gets its own
+`requestId`-correlated message-port channel (`messaging/workflow-protocol.ts`'s
+`WORKFLOW_BRIDGE_PORT_NAME`), separate from the side panel's own `RUN_BRIDGE_PORT_NAME` —
+the background side just forwards to `Scheduler.triggerNow` (#116).
+
+## Options — Workflows tab: builder/editor (#119)
+
+See [ADR 0053](../../docs/adr/0053-workflow-builder-editor.md). "Edit" swaps the
+Workflows list for `workflow-builder-panel.tsx` — a full inspect/edit surface superseding
+#118's own stopgap inline editor: view/reorder/delete recorded steps (a step's own
+`args`/`target`/`expect` stay read-only — exactly what was recorded and replayed), add/
+remove/edit params of either kind, edit the `RunPolicy` (`workflow-run-policy-editor.tsx`,
+operating on raw draft text so a comma-separated allow-list doesn't fight the user
+mid-edit), and enable/configure scheduling (`workflow-schedule-editor.tsx`, saving
+independently via its own button, since `WorkflowScheduleStore` is a separate store from
+`WorkflowStore`). Every capability already existed in `@aegis/workflows` since #108–#116 —
+this issue is UI-only.
+
+## Workflow evals + security suite (#120)
+
+See [ADR 0054](../../docs/adr/0054-workflow-evals-security-suite.md). `evals/src/
+workflow-runner.ts` adds a parallel eval path (not a stretched `EvalTask`): it seeds two
+copies of the same recorded one-step workflow directly into `chrome.storage.local`, one
+pointed at the exact fixture page it was recorded against and one at a page where the same
+button's id changed (its accessible name didn't) — triggers each via the real options
+page's "Run" action, and polls `chrome.storage.local`'s `workflow-runs` key directly for
+the outcome rather than any rendered UI, since a background run has no UI open in
+production. Passes only if the clean replay costs zero model calls and the healed replay
+completes via a small, bounded number of Navigator-only calls. A new Playwright E2E spec,
+`e2e/workflow-unattended-security.spec.ts`, proves an injected page instruction can't cause
+an unauthorized state change during a background self-heal (`gateHeal` hard-stops it
+regardless of what the model saw) and that a step outside its `RunPolicy` allow-list never
+executes even when its target genuinely exists.
+
+## Save as workflow (#121)
+
+See [ADR 0055](../../docs/adr/0055-v0-3-0-release.md). Closes a gap left open since #109
+(`docs/adr/0043-run-recorder.md` deferred "actually subscribing to a live XState actor" —
+i.e., wiring a real "Save as workflow" UI action — to a later issue; none of #110–#120
+turned out to be it). `background/run-manager.ts` now also owns a `@aegis/workflows`
+`RunRecorder`, fed on the exact same "`verifying` exits" transition edge that already
+builds the trace (#26); once a run reaches `done`, its recorder and tab are held (reset the
+moment the _next_ run starts, mirroring the trace's own lifetime) so a new
+`SAVE_AS_WORKFLOW` message can turn them into a real, persisted `Workflow` — origin
+resolved fresh from the tab, a safe default `RunPolicy`
+(`allowStateChanging: false`, no allow-lists). The side panel's
+`save-as-workflow-form.tsx` renders a name field + "Save as workflow" button whenever
+`status === 'done'`, reporting success or a reason it couldn't (no steps recorded, a blank
+name). `e2e/save-as-workflow.spec.ts` proves it end-to-end: a completed run's steps really
+do turn into a workflow a user can find, run, and edit from the options page's Workflows
+tab (#118/#119) — the "record" half of Phase 3's own promise, genuinely working for the
+first time.
+
 ## Commands
 
 ```bash
@@ -286,7 +379,7 @@ pnpm build:edge
 pnpm test     # vitest — messaging, store, and composition-root logic (no chrome.* needed);
               # confirmation-modal.test.tsx opts into a jsdom environment for DOM rendering
 pnpm e2e      # Playwright — the real built extension against local fixture pages
-              # (read-only/confirmation/security/MCP/WebMCP scenarios, #31-#92)
+              # (read-only/confirmation/security/MCP/WebMCP/workflow scenarios, #31-#121)
 ```
 
 ## Note on `chrome.debugger`
