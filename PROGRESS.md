@@ -105,7 +105,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M14 — Deterministic execution
 
 - [x] #111 P3-4 Deterministic workflow executor — blocked by: #110
-- [ ] #112 P3-5 Step verification + result capture — blocked by: #111
+- [x] #112 P3-5 Step verification + result capture — blocked by: #111
 
 ### M15 — Self-healing
 
@@ -460,6 +460,16 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   calls, substituting a freshly-resolved ref via a new `withTargetRef` (`@aegis/actions`,
   symmetric with #109's `targetRefOf`). A target that can't be resolved fails the run
   outright — self-healing that is explicitly #113's job, not this issue's.
+- [0046](docs/adr/0046-step-verification-result-capture.md) — Step verification & result
+  capture (Phase 3, issue #112): `executeWorkflow` now evaluates a step's `expect`
+  `PostCondition` after a successful tool call via new `evaluatePostCondition`
+  (`element_visible`/`element_hidden` via `getComputedStyle`+`getClientRects()`,
+  `url_matches`/`text_contains` via the codebase's first `Runtime.evaluate` calls).
+  `WorkflowStepResult` gains `output?: unknown` (the tool call's own result value,
+  captured regardless of a later `expect` failure). Every `failed` `WorkflowRunOutcome`
+  now carries a typed `NeedsHealingSignal` (`target_not_found` /
+  `tool_call_failed` / `post_condition_failed`) — detected and reported here; acting on
+  it is #113's job.
 
 ## Notes
 
@@ -524,3 +534,7 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   dependency anywhere in this package).
 - #111 (deterministic workflow executor) merged 2026-07-11 — see ADR 0045. Final issue
   in M14 — a recorded workflow now genuinely replays end-to-end with zero LLM calls.
+- #112 (step verification + result capture) merged 2026-07-11 — see ADR 0046. Final
+  issue in M14; a step's `succeeded` flag now means the tool ran _and_ its declared
+  `expect` verified, not just "the tool call didn't error." Next up, M15 (#113/#114) is
+  self-healing.
