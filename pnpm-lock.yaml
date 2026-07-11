@@ -411,6 +411,9 @@ importers:
       '@aegis/perception':
         specifier: workspace:*
         version: link:../perception
+      '@aegis/security':
+        specifier: workspace:*
+        version: link:../security
       '@aegis/shared':
         specifier: workspace:*
         version: link:../shared

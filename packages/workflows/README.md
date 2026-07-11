@@ -93,3 +93,46 @@ pre-action perception the Navigator itself decided against), and a best-effort r
 `docs/adr/0043-run-recorder.md`) since deriving one can genuinely fail outright — a ref
 that doesn't encode a backend node id, or an element already detached by record time —
 leaving `role`/`name` as the only target information captured for that step.
+
+## Parameterization (#110)
+
+A freshly recorded workflow has every literal value baked into its steps' `args` — the
+exact search term, form value, or password the original run happened to use.
+`parameterizeValue`/`parameterizeSecret` extract one such literal into a typed,
+overridable `WorkflowParam`, replacing every occurrence across `steps` with a
+`‹param:name›` placeholder token (built from code points, not literal characters in
+source — the same discipline `@aegis/security`'s `‹secret:name›` already follows):
+
+```ts
+import { parameterizeValue, parameterizeSecret } from '@aegis/workflows';
+
+const { steps, param } = parameterizeValue(recordedSteps, {
+  name: 'search_term',
+  value: 'oat milk', // the literal value as recorded — becomes the param's defaultValue
+});
+
+// A literal that was actually a credential, typed directly rather than via a
+// ‹secret:name› placeholder already, is parameterized the same way — but the literal is
+// used only to find-and-remove it, never stored in the returned param or steps:
+const { steps: withSecret, param: secretParam } = parameterizeSecret(steps, {
+  name: 'login_password',
+  value: 'hunter2',
+  secretName: 'my_password', // which vault secret this resolves from at run time
+});
+```
+
+`validateWorkflowParams(workflow)` checks the two ways params and steps can drift apart:
+every placeholder a step actually references has a matching declared param
+(`PARAM_NOT_DECLARED` otherwise), and no two params share a name (`PARAM_DUPLICATE`). A
+declared param nothing yet references is _not_ an error — a param added ahead of
+finishing an edit is a normal, valid intermediate state.
+
+`resolveWorkflowParams(steps, params, values)` produces the final, concrete steps a
+deterministic run (#111) actually executes: a `value` param's placeholder becomes
+`values[param.name]` (falling back to `param.defaultValue`, or `PARAM_VALUE_MISSING` if
+neither exists); a `secret` param's placeholder becomes `‹secret:name›` — **not** a real
+value. This function never touches a `SecretVault` at all; the real secret is resolved
+later, by the existing `resolveActionSecrets` pipeline immediately before native fill
+(`docs/adr/0012-secret-vault.md`) — the same "the workflow layer never sees a real secret
+value" guarantee the rest of this codebase already holds for a live agent run
+(`docs/adr/0044-workflow-parameterization.md`).
