@@ -58,7 +58,23 @@ export type {
 export { executeWorkflow } from './executor/execute-workflow';
 export { runWorkflow } from './executor/run-workflow';
 
-export type { HealedStep, HealStepDeps, HealStepInput } from './heal/heal-step';
-export { healStep } from './heal/heal-step';
-export type { RunWithHealingDeps } from './heal/run-workflow-with-healing';
+export type { HealDiff, HealStepSnapshot } from './heal/heal-diff';
+export { buildHealDiff } from './heal/heal-diff';
+export type { HealGateDecision, HealGateInput, RunMode } from './heal/heal-gate';
+export { gateHeal } from './heal/heal-gate';
+export type {
+  HealedStep,
+  HealOutcome,
+  HealStepDeps,
+  HealStepInput,
+  PendingHeal,
+} from './heal/heal-step';
+export { applyConfirmedHeal, healStep } from './heal/heal-step';
+export { rollbackHealedStep } from './heal/rollback';
+export type {
+  HardStoppedRunOutcome,
+  HealingRunOutcome,
+  NeedsConfirmationRunOutcome,
+  RunWithHealingDeps,
+} from './heal/run-workflow-with-healing';
 export { runWorkflowWithHealing } from './heal/run-workflow-with-healing';

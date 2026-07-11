@@ -214,6 +214,7 @@ const result = await runWorkflowWithHealing(workflow, { search_term: 'oat milk' 
   ctx: executorContext,
   session: cdpSession,
   navigate: navigatorService, // the same NavigatorService the live agent loop uses
+  mode: 'attended', // or 'unattended' — whether a human is present to confirm a heal (#114)
 });
 ```
 
@@ -222,18 +223,38 @@ the current page, then calls `deps.navigate` with a `DecideInput` framing the br
 as a one-step sub-goal ("recover this step; find the current equivalent element or tool
 call"). This reuses the live agent loop's whole `NavigatorService` — the same
 schema/hallucinated-ref validation and self-correction retry loop a real run already has,
-for free. Only the Navigator's _first_ proposed tool call is tried and executed; if the
-step declared an `expect` post-condition (#112), the fix must satisfy it too. Any failure
-along this path (no fix proposed, the fix's tool call failed, the fix still doesn't verify)
-is `HEAL_FAILED` — `runWorkflowWithHealing` gives up at that point, returning the
-_original_ `failed` outcome with the workflow untouched.
+for free. Only the Navigator's _first_ proposed tool call is tried; if the step declared
+an `expect` post-condition (#112), the fix must satisfy it too, once it actually runs. Any
+failure along this path (no fix proposed, the fix's tool call failed, the fix still
+doesn't verify) is `HEAL_FAILED` — `runWorkflowWithHealing` gives up at that point,
+returning the _original_ `failed` outcome with the workflow untouched.
 
-A successful heal patches the fixed step into the persisted `workflow` via the existing
-`WorkflowStore.updateWorkflow` — no new patching logic needed, since that already bumps
-`version`/`updatedAt` — then continues executing the steps after it. The next run replays
-deterministically again with zero LLM calls, until something else breaks
+A successful, ungated heal patches the fixed step into the persisted `workflow` via the
+existing `WorkflowStore.updateWorkflow` — no new patching logic needed, since that already
+bumps `version`/`updatedAt` — then continues executing the steps after it. The next run
+replays deterministically again with zero LLM calls, until something else breaks
 (`docs/adr/0047-failure-detection-self-heal.md`).
 
-Deliberately unguarded: executing the Navigator's proposed fix has no risk classification
-or confirmation gate in front of it yet. That's explicitly #114's job ("Healing safety &
-review"), not this issue's.
+## Healing safety & review (#114)
+
+A healed step is LLM-improvised content nobody has reviewed — before #114, it executed
+unconditionally, including a `state_changing` action. `healStep` now classifies the
+proposed fix's risk and gates it (`heal/heal-gate.ts`) _before_ ever calling the tool:
+
+- **Not state-changing** → `applied` — runs exactly as before.
+- **State-changing, attended** → `needs_confirmation` — never executes; carries a
+  `HealDiff` (before/after `toolId`/`args`/`target`, plus `risk`) and a `PendingHeal` a
+  caller resumes via `applyConfirmedHeal(pending, deps)` once a human signs off.
+- **State-changing, unattended** → `hard_stopped` — never executes, no resumption; a
+  healed state-changing action must never run silently with no one to confirm it.
+- **Tool id outside the workflow's `RunPolicy.allowedToolIds`, unattended** →
+  `hard_stopped` regardless of risk — an authorization boundary, not a risk heuristic.
+
+`RunPolicy.allowStateChanging` never overrides this: it pre-authorizes the step as
+_recorded_, never a fix the Navigator proposed just now.
+`runWorkflowWithHealing`'s outcome widens to `HealingRunOutcome` to carry the two new
+gated outcomes (`HardStoppedRunOutcome`/`NeedsConfirmationRunOutcome`) without touching
+`executeWorkflow`/`runWorkflow`'s own `WorkflowRunOutcome` (#111), which never produces
+them. `rollbackHealedStep(store, workflowId, stepId, previousStep)` reverts one step back
+to a prior snapshot — typically a rejected heal's `HealDiff.before` — via the same
+`WorkflowStore.updateWorkflow` (`docs/adr/0048-healing-safety-review.md`).

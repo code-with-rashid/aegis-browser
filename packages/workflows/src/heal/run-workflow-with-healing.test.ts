@@ -70,7 +70,7 @@ function healableFakeCdp(): FakeCdp {
                 nodeId: '1',
                 ignored: false,
                 role: { type: 'string', value: 'button' },
-                name: { type: 'string', value: 'Submit' },
+                name: { type: 'string', value: 'Continue' },
                 backendDOMNodeId: 42,
               },
             ],
@@ -126,6 +126,7 @@ describe('runWorkflowWithHealing', () => {
       ctx,
       session: cdp,
       navigate,
+      mode: 'attended',
     });
 
     expect(result.ok).toBe(true);
@@ -167,6 +168,7 @@ describe('runWorkflowWithHealing', () => {
       ctx,
       session: cdp,
       navigate,
+      mode: 'attended',
     });
 
     expect(result.ok).toBe(true);
@@ -204,9 +206,122 @@ describe('runWorkflowWithHealing', () => {
       ctx,
       session: cdp,
       navigate,
+      mode: 'attended',
     });
 
     expect(result.ok && result.value.kind).toBe('completed');
     expect(navigateCalls).toBe(0);
+  });
+
+  describe('healing safety gate (#114)', () => {
+    function stateChangingFakeCdp(): FakeCdp {
+      return createFakeCdp(1, {
+        onSend: (method, params) => {
+          switch (method) {
+            case 'DOM.resolveNode': {
+              const backendNodeId = (params as { backendNodeId?: number }).backendNodeId;
+              if (backendNodeId === 99) {
+                return err(new CdpError('CDP_SEND_FAILED', 'detached'));
+              }
+              return ok({ object: { objectId: `obj-${backendNodeId}` } });
+            }
+            case 'DOM.getDocument':
+              return ok({
+                root: {
+                  nodeId: 1,
+                  backendNodeId: 1,
+                  nodeType: 1,
+                  nodeName: 'BODY',
+                  localName: 'body',
+                  nodeValue: '',
+                  attributes: [],
+                  children: [],
+                  childNodeCount: 0,
+                },
+              });
+            case 'DOM.querySelector':
+              return ok({ nodeId: 0 });
+            case 'DOM.getBoxModel':
+              return ok({ model: { border: [0, 0, 10, 0, 10, 10, 0, 10] } });
+            case 'DOM.describeNode':
+              return ok({
+                node: { nodeName: 'BUTTON', backendNodeId: 42, attributes: ['id', 'submit-order'] },
+              });
+            case 'Accessibility.getFullAXTree':
+              return ok({
+                nodes: [
+                  {
+                    nodeId: '1',
+                    ignored: false,
+                    role: { type: 'string', value: 'button' },
+                    name: { type: 'string', value: 'Submit Order' },
+                    backendDOMNodeId: 42,
+                  },
+                ],
+              });
+            default:
+              return ok(undefined);
+          }
+        },
+      });
+    }
+
+    it('stops with needs_confirmation for a state-changing fix when attended, workflow untouched', async () => {
+      const cdp = stateChangingFakeCdp();
+      await cdp.attach();
+      const registry = createDefaultToolRegistry();
+      const provider = createMockProvider({ responses: [navigatorResponse()] });
+      const navigate = createNavigatorService(routerFor(provider), registry);
+      const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
+      const store = createWorkflowStore(createMemoryStorage());
+      const workflow = workflowFixture();
+      await store.createWorkflow(workflow);
+
+      const result = await runWorkflowWithHealing(workflow, {}, store, {
+        registry,
+        ctx,
+        session: cdp,
+        navigate,
+        mode: 'attended',
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.value.kind).toBe('needs_confirmation');
+      if (result.ok && result.value.kind === 'needs_confirmation') {
+        expect(result.value.diff.risk).toBe('state_changing');
+      }
+
+      const stored = await store.getWorkflow(workflow.id);
+      expect(stored.ok && stored.value?.version).toBe(0);
+    });
+
+    it('stops with hard_stopped for a state-changing fix when unattended, workflow untouched', async () => {
+      const cdp = stateChangingFakeCdp();
+      await cdp.attach();
+      const registry = createDefaultToolRegistry();
+      const provider = createMockProvider({ responses: [navigatorResponse()] });
+      const navigate = createNavigatorService(routerFor(provider), registry);
+      const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
+      const store = createWorkflowStore(createMemoryStorage());
+      const workflow = workflowFixture();
+      await store.createWorkflow(workflow);
+
+      const result = await runWorkflowWithHealing(workflow, {}, store, {
+        registry,
+        ctx,
+        session: cdp,
+        navigate,
+        mode: 'unattended',
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.value.kind).toBe('hard_stopped');
+      if (result.ok && result.value.kind === 'hard_stopped') {
+        expect(result.value.reason).toContain('unattended');
+      }
+
+      const stored = await store.getWorkflow(workflow.id);
+      expect(stored.ok && stored.value?.version).toBe(0);
+    });
   });
 });
