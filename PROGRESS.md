@@ -104,7 +104,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M14 — Deterministic execution
 
-- [ ] #111 P3-4 Deterministic workflow executor — blocked by: #110
+- [x] #111 P3-4 Deterministic workflow executor — blocked by: #110
 - [ ] #112 P3-5 Step verification + result capture — blocked by: #111
 
 ### M15 — Self-healing
@@ -451,6 +451,15 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   existing `resolveActionSecrets` pipeline. `validateWorkflowParams` catches drift in both
   directions (undeclared placeholder, duplicate param name) without requiring every
   declared param to already be referenced.
+- [0045](docs/adr/0045-deterministic-workflow-executor.md) — Deterministic workflow
+  executor (Phase 3, issue #111): `runWorkflow` binds params (#110) then replays steps
+  with zero LLM calls, straight through `ToolRegistry.call` (not `ActionRunner` — a
+  replay's failure mode is "the page changed," which retrying can't fix). New
+  `resolveStepTarget` tries the recorded `ref` first, then falls back to the resilient
+  `selector` (#109) via new `DOM.getDocument`/`DOM.querySelector`/`DOM.describeNode` CDP
+  calls, substituting a freshly-resolved ref via a new `withTargetRef` (`@aegis/actions`,
+  symmetric with #109's `targetRefOf`). A target that can't be resolved fails the run
+  outright — self-healing that is explicitly #113's job, not this issue's.
 
 ## Notes
 
@@ -513,3 +522,5 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
 - #110 (parameterization) merged 2026-07-11 — see ADR 0044. `@aegis/workflows` gains its
   first dependency on `@aegis/security` (for `toSecretPlaceholder` only — no `SecretVault`
   dependency anywhere in this package).
+- #111 (deterministic workflow executor) merged 2026-07-11 — see ADR 0045. Final issue
+  in M14 — a recorded workflow now genuinely replays end-to-end with zero LLM calls.

@@ -3,8 +3,8 @@
 Phase 3: turns a one-off agent run into a reusable, deterministic, self-healing
 `Workflow` — record once, replay without the planner, heal when a step breaks, and run
 unattended only within a pre-authorized `RunPolicy`. Depends on `@aegis/agent`/
-`@aegis/actions`/`@aegis/perception`/`@aegis/shared` — never the other direction, so
-those packages stay unaware `@aegis/workflows` exists
+`@aegis/actions`/`@aegis/perception`/`@aegis/security`/`@aegis/shared` — never the other
+direction, so those packages stay unaware `@aegis/workflows` exists
 (`docs/adr/0042-workflow-data-model-storage.md`).
 
 ## The data model (#108)
@@ -136,3 +136,43 @@ later, by the existing `resolveActionSecrets` pipeline immediately before native
 (`docs/adr/0012-secret-vault.md`) — the same "the workflow layer never sees a real secret
 value" guarantee the rest of this codebase already holds for a live agent run
 (`docs/adr/0044-workflow-parameterization.md`).
+
+## Deterministic execution (#111)
+
+`runWorkflow(workflow, values, registry, ctx, session, signal?)` binds `values` into
+`workflow.steps` (#110) then replays them **with no LLM calls at all** — the whole point
+of recording a workflow in the first place. Each step is dispatched straight through
+`ToolRegistry.call`, the same generic mechanism the live agent loop's `ActService` uses
+for a non-browser tool — reused here for every tool regardless of source, since a
+deterministic replay has no use for `ActionRunner`'s retry/stall machinery (tuned for an
+LLM-driven loop encountering an unpredictable page; a replay's failure mode is "the page
+changed since recording," which retrying can't fix).
+
+```ts
+import { runWorkflow } from '@aegis/workflows';
+
+const result = await runWorkflow(
+  workflow,
+  { search_term: 'almond milk' },
+  toolRegistry,
+  executorContext,
+  cdpSession,
+);
+if (result.ok && result.value.kind === 'completed') {
+  // every step ran, in order, with zero planner/navigator/verifier calls
+}
+```
+
+Before running each step, `resolveStepTarget` re-targets it for the _current_ page: it
+tries the recorded `ref` first (works when replaying within the same page load a step was
+recorded against), then falls back to the resilient `selector` (#109) — the mechanism
+that actually matters for a genuine "record once, replay later" workflow, since a fresh
+page load assigns new backend node ids. Resolving a selector is new CDP surface
+(`DOM.getDocument` + `DOM.querySelector` + `DOM.describeNode`) that produces a _new_ ref
+for the current session, substituted into the step's `args` via `@aegis/actions`'
+`withTargetRef` — the setter symmetric with the `targetRefOf` getter #109 already added.
+
+Neither the recorded `ref` nor the `selector` resolving is a real, expected failure mode
+(`TARGET_NOT_FOUND`) — this executor stops the run there rather than trying to recover;
+self-healing that (re-locating the element via the LLM, patching the workflow) is #113's
+job, not this deterministic path's (`docs/adr/0045-deterministic-workflow-executor.md`).

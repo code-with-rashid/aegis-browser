@@ -2,7 +2,7 @@ import { toElementRef } from '@aegis/shared';
 import { describe, expect, it } from 'vitest';
 
 import type { Action } from './schema';
-import { targetRefOf } from './target-ref';
+import { targetRefOf, withTargetRef } from './target-ref';
 
 function action<T extends Action>(value: T): T {
   return value;
@@ -62,5 +62,44 @@ describe('targetRefOf', () => {
     expect(targetRefOf(action({ type: 'wait', ms: 100 }))).toBeUndefined();
     expect(targetRefOf(action({ type: 'extract', instructions: 'read it' }))).toBeUndefined();
     expect(targetRefOf(action({ type: 'done', success: true, summary: 'ok' }))).toBeUndefined();
+  });
+});
+
+describe('withTargetRef', () => {
+  it('replaces the ref on click', () => {
+    const result = withTargetRef(
+      action({ type: 'click', ref: toElementRef('ax:1') }),
+      toElementRef('dom:2'),
+    );
+    expect(result).toEqual({ type: 'click', ref: 'dom:2' });
+  });
+
+  it('replaces the ref on input_text, preserving the other fields', () => {
+    const result = withTargetRef(
+      action({ type: 'input_text', ref: toElementRef('ax:1'), text: 'hello' }),
+      toElementRef('dom:2'),
+    );
+    expect(result).toEqual({ type: 'input_text', ref: 'dom:2', text: 'hello' });
+  });
+
+  it('sets a ref on scroll even when it had none before', () => {
+    const result = withTargetRef(
+      action({ type: 'scroll', direction: 'down' }),
+      toElementRef('dom:2'),
+    );
+    expect(result).toEqual({ type: 'scroll', direction: 'down', ref: 'dom:2' });
+  });
+
+  it('returns every action type with no ref concept unchanged', () => {
+    const navigate = action({ type: 'navigate', url: 'https://example.com' });
+    expect(withTargetRef(navigate, toElementRef('dom:2'))).toEqual(navigate);
+    const done = action({ type: 'done', success: true, summary: 'ok' });
+    expect(withTargetRef(done, toElementRef('dom:2'))).toEqual(done);
+  });
+
+  it('round-trips with targetRefOf', () => {
+    const original = action({ type: 'click', ref: toElementRef('ax:1') });
+    const retargeted = withTargetRef(original, toElementRef('dom:99'));
+    expect(targetRefOf(retargeted)).toBe('dom:99');
   });
 });
