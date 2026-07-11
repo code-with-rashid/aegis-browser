@@ -98,7 +98,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M13 — Workflow model & recording
 
-- [ ] #108 P3-1 Workflow data model + storage — blocked by: none
+- [x] #108 P3-1 Workflow data model + storage — blocked by: none
 - [ ] #109 P3-2 Run recorder — blocked by: #108
 - [ ] #110 P3-3 Parameterization — blocked by: #109
 
@@ -426,6 +426,14 @@ PendingToolCallPreview[]` field (any source, via `describeToolCall` + `summarize
 README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gains one
   `[0.2.0]` entry covering four real bugs found while building Phase 2; every package
   bumped `0.1.1` → `0.2.0`, mirroring the `v0.1.1` patch release's own bump mechanics.
+- [0042](docs/adr/0042-workflow-data-model-storage.md) — Workflow data model + storage
+  (Phase 3, issue #108): a new `@aegis/workflows` package (depends only on `@aegis/shared`
+  so far) — `Workflow`/`WorkflowStep`/`WorkflowParam`/`RunPolicy` Zod schemas,
+  locally-branded `WorkflowId`/`WorkflowStepId` (a step gets a stable id not in the
+  original sketch, justified by #113/#119's later need to name one exact step), a real
+  but currently-empty migration mechanism (tested against synthetic fixtures, no invented
+  domain migrations), and `WorkflowStore` (create/get/update/remove/list, one storage key
+  holding a map keyed by id, mirroring `@aegis/mcp`'s `McpServerStore`).
 
 ## Notes
 
@@ -480,3 +488,5 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   off 2026-07-11 per `PHASE_3_PROMPT.md`. Milestones M13–M17 and issues #108–#121 created
   (backlog P3-1…P3-14 map 1:1 to #108…#121 in listed order). Work proceeds via the same
   per-issue loop as Phases 1 and 2.
+- #108 (workflow data model + storage) merged 2026-07-11 — see ADR 0042. First issue in
+  M13; `@aegis/workflows` exists as a real package with zero consumers yet, as expected.
