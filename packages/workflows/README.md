@@ -199,3 +199,41 @@ attaches a typed `NeedsHealingSignal` (`{ stepId, reason, message }`,
 `reason: 'target_not_found' | 'tool_call_failed' | 'post_condition_failed'`) to the
 `failed` `WorkflowRunOutcome`. This issue only detects and reports it; acting on it (a
 repair attempt) is #113's job (`docs/adr/0046-step-verification-result-capture.md`).
+
+## Failure detection & self-heal (#113)
+
+`runWorkflowWithHealing(workflow, values, store, deps, signal?)` is `runWorkflow` (#111)
+plus one capability: when a step fails, it asks the Navigator to fix _that step only_
+instead of giving up.
+
+```ts
+import { runWorkflowWithHealing } from '@aegis/workflows';
+
+const result = await runWorkflowWithHealing(workflow, { search_term: 'oat milk' }, store, {
+  registry: toolRegistry,
+  ctx: executorContext,
+  session: cdpSession,
+  navigate: navigatorService, // the same NavigatorService the live agent loop uses
+});
+```
+
+On a failed step, `healStep` (`heal/heal-step.ts`) gathers a fresh `PerceptionPayload` of
+the current page, then calls `deps.navigate` with a `DecideInput` framing the broken step
+as a one-step sub-goal ("recover this step; find the current equivalent element or tool
+call"). This reuses the live agent loop's whole `NavigatorService` — the same
+schema/hallucinated-ref validation and self-correction retry loop a real run already has,
+for free. Only the Navigator's _first_ proposed tool call is tried and executed; if the
+step declared an `expect` post-condition (#112), the fix must satisfy it too. Any failure
+along this path (no fix proposed, the fix's tool call failed, the fix still doesn't verify)
+is `HEAL_FAILED` — `runWorkflowWithHealing` gives up at that point, returning the
+_original_ `failed` outcome with the workflow untouched.
+
+A successful heal patches the fixed step into the persisted `workflow` via the existing
+`WorkflowStore.updateWorkflow` — no new patching logic needed, since that already bumps
+`version`/`updatedAt` — then continues executing the steps after it. The next run replays
+deterministically again with zero LLM calls, until something else breaks
+(`docs/adr/0047-failure-detection-self-heal.md`).
+
+Deliberately unguarded: executing the Navigator's proposed fix has no risk classification
+or confirmation gate in front of it yet. That's explicitly #114's job ("Healing safety &
+review"), not this issue's.

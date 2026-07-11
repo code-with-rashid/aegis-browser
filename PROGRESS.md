@@ -109,7 +109,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M15 — Self-healing
 
-- [ ] #113 P3-6 Failure detection + self-heal — blocked by: #112
+- [x] #113 P3-6 Failure detection + self-heal — blocked by: #112
 - [ ] #114 P3-7 Healing safety & review — blocked by: #113
 
 ### M16 — Scheduling & background runs
@@ -470,6 +470,16 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   now carries a typed `NeedsHealingSignal` (`target_not_found` /
   `tool_call_failed` / `post_condition_failed`) — detected and reported here; acting on
   it is #113's job.
+- [0047](docs/adr/0047-failure-detection-self-heal.md) — Failure detection & self-heal
+  (Phase 3, issue #113): new `healStep` reuses the live agent loop's `NavigatorService`
+  (`@aegis/agent`) to propose a fix for one broken step against a fresh
+  `getPerceptionPayload` read, executes only its first proposed tool call, and re-checks
+  the step's `expect` if declared. New `runWorkflowWithHealing` runs `executeWorkflow`
+  (#111) normally and, on a failed step, calls `healStep`; a successful fix is patched
+  into the persisted workflow via the existing `WorkflowStore.updateWorkflow` (bumping
+  `version`) before continuing the remaining steps. Gives up — original `failed` outcome,
+  workflow untouched — the moment one heal attempt doesn't succeed. Deliberately no risk/
+  confirmation gate in front of executing the fix yet — that's #114's job.
 
 ## Notes
 
@@ -538,3 +548,7 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   issue in M14; a step's `succeeded` flag now means the tool ran _and_ its declared
   `expect` verified, not just "the tool call didn't error." Next up, M15 (#113/#114) is
   self-healing.
+- #113 (failure detection + self-heal) merged 2026-07-11 — see ADR 0047. First issue in
+  M15; `runWorkflowWithHealing` can now recover a step whose target shifted by asking the
+  live agent loop's own Navigator for a fix, tested end to end with a `MockProvider` and a
+  mutated selector fixture. No safety gate on the fix yet — that's #114.
