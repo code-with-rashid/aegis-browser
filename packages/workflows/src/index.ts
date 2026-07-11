@@ -95,6 +95,10 @@ export type { RunConcurrencyLimiter } from './background/run-concurrency';
 export { createRunConcurrencyLimiter } from './background/run-concurrency';
 export type { BackgroundRunDeps } from './background/run-workflow-in-background';
 export { runWorkflowInBackground } from './background/run-workflow-in-background';
+export { resolveStepArgsSecrets } from './background/resolve-step-secrets';
+export type { StepGateDecision, StepGateInput } from './background/run-policy-gate';
+export { gateOriginalStep, gateWorkflowOrigin } from './background/run-policy-gate';
+export { exceedsMaxSteps, hasReachedDailyRunLimit } from './background/run-rate-limit';
 
 export type { ScheduleTrigger, WorkflowSchedule } from './schedule/workflow-schedule';
 export { ScheduleTriggerSchema, WorkflowScheduleSchema } from './schedule/workflow-schedule';

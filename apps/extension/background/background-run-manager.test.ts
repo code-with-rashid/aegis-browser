@@ -269,4 +269,92 @@ describe('createBackgroundRunManager', () => {
     const record = await runStore.getRun(toRunRecordId('run-1'));
     expect(record.ok && record.value?.status).toBe('failed');
   });
+
+  describe('unattended-mode guardrails (#117)', () => {
+    it('rejects a new run with RATE_LIMIT_REACHED once maxRunsPerDay is reached, without opening a tab', async () => {
+      const runStorage = createMemoryStorage();
+      const workflowStorage = createMemoryStorage();
+      const workflowStore = createWorkflowStore(workflowStorage);
+      await workflowStore.createWorkflow({
+        ...twoStepWorkflowInput(),
+        authorization: {
+          allowedToolIds: [],
+          allowedOrigins: [],
+          allowStateChanging: false,
+          maxRunsPerDay: 1,
+        },
+      });
+      const runStore = createWorkflowRunStore(runStorage);
+      await runStore.createRun({
+        id: toRunRecordId('earlier-run'),
+        workflowId: toWorkflowId('check-order-status'),
+        values: {},
+      });
+      let tabOpened = false;
+      const manager = createBackgroundRunManager(
+        runStorage,
+        workflowStorage,
+        1,
+        fakeBuildLoop(),
+        () => {
+          tabOpened = true;
+          return Promise.resolve(ok({ tabId: 1 }));
+        },
+        fakeCloseTab([]),
+      );
+
+      const result = await manager.startBackgroundRun(toWorkflowId('check-order-status'), {});
+
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.error.code).toBe('RATE_LIMIT_REACHED');
+      expect(tabOpened).toBe(false);
+    });
+
+    it('notifies when a run hard-stops on an out-of-policy state-changing step', async () => {
+      const runStorage = createMemoryStorage();
+      const workflowStorage = createMemoryStorage();
+      const workflowStore = createWorkflowStore(workflowStorage);
+      await workflowStore.createWorkflow({
+        id: toWorkflowId('checkout'),
+        name: 'Checkout',
+        origin: 'https://shop.example.com',
+        steps: [
+          {
+            stepId: toWorkflowStepId('step-1'),
+            toolId: 'browser.click',
+            args: { type: 'click', ref: 'ax:1' },
+            target: { ref: 'ax:1', name: 'Submit Order' },
+          },
+        ],
+        authorization: { allowedToolIds: [], allowedOrigins: [], allowStateChanging: false },
+      });
+      let notified: { workflowName: string; reason: string } | undefined;
+      const manager = createBackgroundRunManager(
+        runStorage,
+        workflowStorage,
+        1,
+        fakeBuildLoop(),
+        fakeOpenTab(() => 42),
+        fakeCloseTab([]),
+        () => 'run-1',
+        (workflowName, reason) => {
+          notified = { workflowName, reason };
+          return Promise.resolve(ok(undefined));
+        },
+      );
+
+      await manager.startBackgroundRun(toWorkflowId('checkout'), {});
+
+      const runStore = createWorkflowRunStore(runStorage);
+      await waitUntil(async () => {
+        const record = await runStore.getRun(toRunRecordId('run-1'));
+        return record.ok && record.value?.status !== 'running';
+      });
+
+      const record = await runStore.getRun(toRunRecordId('run-1'));
+      expect(record.ok && record.value?.status).toBe('hard_stopped');
+      expect(notified?.workflowName).toBe('Checkout');
+      expect(notified?.reason).toContain('state-changing');
+    });
+  });
 });

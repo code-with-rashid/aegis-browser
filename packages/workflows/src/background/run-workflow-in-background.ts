@@ -1,22 +1,28 @@
 import type { ToolContext, ToolRegistry } from '@aegis/actions';
 import type { NavigatorService } from '@aegis/agent';
 import type { CdpSession } from '@aegis/perception';
+import type { SecretVault } from '@aegis/security';
 import type { Result } from '@aegis/shared';
 
+import type { WorkflowError } from '../errors';
 import { executeWorkflow, type WorkflowStepResult } from '../executor/execute-workflow';
 import { healStep } from '../heal/heal-step';
 import { resolveWorkflowParams } from '../params/resolve-params';
 import type { Workflow, WorkflowStep } from '../schema';
 import type { WorkflowStore } from '../store/workflow-store';
-import type { WorkflowError } from '../errors';
+import { gateOriginalStep, gateWorkflowOrigin } from './run-policy-gate';
+import { exceedsMaxSteps } from './run-rate-limit';
 import type { RunRecordStatus, WorkflowRunRecord } from './run-record';
 import type { WorkflowRunStore } from './run-record-store';
+import { resolveStepArgsSecrets } from './resolve-step-secrets';
 
 export interface BackgroundRunDeps {
   readonly registry: ToolRegistry;
   readonly ctx: ToolContext;
   readonly session: CdpSession;
   readonly navigate: NavigatorService;
+  /** Resolves `‹secret:name›` placeholders in a step's args before it executes (#117) — a locked vault or a missing secret hard-stops the run rather than ever sending the raw placeholder as if it were the credential. */
+  readonly vault: SecretVault;
 }
 
 async function finalizeRun(
@@ -46,8 +52,14 @@ async function finalizeRun(
  * exactly the last completed step, never re-running anything already recorded and never
  * silently skipping anything that wasn't.
  *
- * Always heals with `mode: 'unattended'` (#114): a state-changing fix hard-stops rather
- * than pausing for confirmation — there is no one to confirm it in a background run.
+ * Before ever running a step, enforces `workflow.authorization` (#117 — "safe autonomy"):
+ * the workflow's own `origin` and step count are checked once up front
+ * (`gateWorkflowOrigin`/`exceedsMaxSteps`); each *recorded* step's tool id and classified
+ * risk are checked via `gateOriginalStep` (distinct from `heal-gate.ts`'s stricter
+ * `gateHeal` — a recorded, `allowStateChanging`-authorized state-changing step is allowed
+ * to replay unattended; a Navigator-*proposed* fix never is). Always heals with
+ * `mode: 'unattended'` (#114): a state-changing fix hard-stops rather than pausing for
+ * confirmation — there is no one to confirm it in a background run.
  */
 export async function runWorkflowInBackground(
   workflow: Workflow,
@@ -57,6 +69,29 @@ export async function runWorkflowInBackground(
   deps: BackgroundRunDeps,
   signal?: AbortSignal,
 ): Promise<Result<WorkflowRunRecord, WorkflowError>> {
+  if (exceedsMaxSteps(workflow, workflow.authorization)) {
+    return finalizeRun(
+      runStore,
+      runRecord.id,
+      'hard_stopped',
+      runRecord.stepResults as WorkflowStepResult[],
+      runRecord.nextStepIndex,
+      `Workflow has more steps (${workflow.steps.length}) than its RunPolicy allows (maxStepsPerRun: ${workflow.authorization.maxStepsPerRun})`,
+    );
+  }
+
+  const originGate = gateWorkflowOrigin(workflow.origin, workflow.authorization);
+  if (originGate.kind === 'hard_stop') {
+    return finalizeRun(
+      runStore,
+      runRecord.id,
+      'hard_stopped',
+      runRecord.stepResults as WorkflowStepResult[],
+      runRecord.nextStepIndex,
+      originGate.reason,
+    );
+  }
+
   const resolved = resolveWorkflowParams(workflow.steps, workflow.params, runRecord.values);
   if (!resolved.ok) {
     return finalizeRun(
@@ -83,8 +118,40 @@ export async function runWorkflowInBackground(
       return finalizeRun(runStore, runRecord.id, 'completed', stepResults, index);
     }
 
+    const riskContext =
+      step.target?.name !== undefined ? { elementName: step.target.name } : undefined;
+    const risk = deps.registry.classify(step.toolId, riskContext);
+    const stepGate = gateOriginalStep({
+      toolId: step.toolId,
+      risk,
+      runPolicy: workflow.authorization,
+    });
+    if (stepGate.kind === 'hard_stop') {
+      return finalizeRun(
+        runStore,
+        runRecord.id,
+        'hard_stopped',
+        stepResults,
+        index,
+        stepGate.reason,
+      );
+    }
+
+    const secretsResolved = await resolveStepArgsSecrets(step.args, deps.vault);
+    if (!secretsResolved.ok) {
+      return finalizeRun(
+        runStore,
+        runRecord.id,
+        'hard_stopped',
+        stepResults,
+        index,
+        `Could not resolve a secret for step "${step.stepId}": ${secretsResolved.error.message}`,
+      );
+    }
+    const resolvedStep: WorkflowStep = { ...step, args: secretsResolved.value };
+
     const stepOutcome = await executeWorkflow(
-      [step],
+      [resolvedStep],
       deps.registry,
       deps.ctx,
       deps.session,
