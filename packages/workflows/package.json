@@ -12,6 +12,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aegis/actions": "workspace:*",
+    "@aegis/agent": "workspace:*",
+    "@aegis/perception": "workspace:*",
     "@aegis/shared": "workspace:*",
     "zod": "^4.4.3"
   },

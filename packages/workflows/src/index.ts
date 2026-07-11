@@ -32,3 +32,9 @@ export { WORKFLOW_MIGRATIONS } from './migration/workflow-migrations';
 
 export type { NewWorkflowInput, WorkflowPatch, WorkflowStore } from './store/workflow-store';
 export { createWorkflowStore } from './store/workflow-store';
+
+export { deriveSelector } from './recorder/derive-selector';
+export type { RecordableStepInput } from './recorder/build-workflow-steps';
+export { buildWorkflowSteps } from './recorder/build-workflow-steps';
+export type { RunRecorder } from './recorder/run-recorder';
+export { createRunRecorder } from './recorder/run-recorder';
