@@ -100,7 +100,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #108 P3-1 Workflow data model + storage — blocked by: none
 - [x] #109 P3-2 Run recorder — blocked by: #108
-- [ ] #110 P3-3 Parameterization — blocked by: #109
+- [x] #110 P3-3 Parameterization — blocked by: #109
 
 ### M14 — Deterministic execution
 
@@ -441,6 +441,16 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   CDP call) builds a best-effort resilient selector; `WorkflowTarget.selector` is revised
   to optional since deriving one can genuinely fail. `targetRefOf` moved from a private
   duplicate in `policy-service.ts` into `@aegis/actions`, used by both callers now.
+- [0044](docs/adr/0044-workflow-parameterization.md) — Workflow parameterization (Phase 3,
+  issue #110): a `‹param:name›` placeholder, byte-for-byte the same delimiter convention
+  as `@aegis/security`'s `‹secret:name›`; a generic `mapStringsDeep` walker (since
+  `resolveActionSecrets` is hardcoded to known `Action` fields, unusable for arbitrary
+  `WorkflowStep.args`). `parameterizeSecret` never stores the literal it removes;
+  `resolveWorkflowParams` never touches a `SecretVault` — a secret-kind param resolves to
+  another placeholder (`‹secret:name›`), with the real vault lookup deferred to the
+  existing `resolveActionSecrets` pipeline. `validateWorkflowParams` catches drift in both
+  directions (undeclared placeholder, duplicate param name) without requiring every
+  declared param to already be referenced.
 
 ## Notes
 
@@ -500,3 +510,6 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
 - #109 (run recorder) merged 2026-07-11 — see ADR 0043. `@aegis/workflows` gains its
   first cross-package dependencies (`agent`/`actions`/`perception`); still no consumer in
   `apps/extension` yet — that's a later issue's UI wiring, not this one's scope.
+- #110 (parameterization) merged 2026-07-11 — see ADR 0044. `@aegis/workflows` gains its
+  first dependency on `@aegis/security` (for `toSecretPlaceholder` only — no `SecretVault`
+  dependency anywhere in this package).

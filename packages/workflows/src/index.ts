@@ -38,3 +38,9 @@ export type { RecordableStepInput } from './recorder/build-workflow-steps';
 export { buildWorkflowSteps } from './recorder/build-workflow-steps';
 export type { RunRecorder } from './recorder/run-recorder';
 export { createRunRecorder } from './recorder/run-recorder';
+
+export { findParamPlaceholderNames, toParamPlaceholder } from './params/param-placeholder';
+export { mapStringsDeep } from './params/map-strings-deep';
+export type { ParameterizeSecretInput, ParameterizeValueInput } from './params/parameterize';
+export { parameterizeSecret, parameterizeValue } from './params/parameterize';
+export { resolveWorkflowParams, validateWorkflowParams } from './params/resolve-params';
