@@ -1,6 +1,7 @@
 import { createChromeStorageAdapter, createLogger } from '@aegis/shared';
 import { defineBackground } from 'wxt/utils/define-background';
 
+import { createBackgroundRunManager } from '../background/background-run-manager';
 import { createRunManager } from '../background/run-manager';
 import { createWebMcpTabBridge } from '../background/webmcp-tab-bridge';
 import { listenForPanelConnections, listenForWebMcpTabConnections } from '../messaging/chrome-port';
@@ -11,6 +12,9 @@ import type {
 } from '../messaging/webmcp-protocol';
 
 const logger = createLogger('background');
+
+/** No UI configures this yet (#116/#117 territory) — a conservative fixed cap so an unattended workflow run can never pile up unboundedly. */
+const MAX_CONCURRENT_BACKGROUND_RUNS = 1;
 
 export default defineBackground(() => {
   logger.info('background service worker started');
@@ -39,5 +43,16 @@ export default defineBackground(() => {
 
   runManager.initialize().catch((error: unknown) => {
     logger.error('Failed to resume a persisted run', { error });
+  });
+
+  const localStorage = createChromeStorageAdapter(chrome.storage.local);
+  const backgroundRunManager = createBackgroundRunManager(
+    localStorage,
+    localStorage,
+    MAX_CONCURRENT_BACKGROUND_RUNS,
+  );
+
+  backgroundRunManager.initialize().catch((error: unknown) => {
+    logger.error('Failed to resume a persisted background workflow run', { error });
   });
 });

@@ -7,7 +7,8 @@ import { AegisError } from '@aegis/shared';
  * "no such workflow" apart from "storage itself broke." `PARAM_*` codes are raised by
  * `validateWorkflowParams`/`resolveWorkflowParams` (#110): a placeholder referencing a
  * param that was never declared, two params sharing a name, or a `value`-kind param with
- * neither a supplied run-time value nor a `defaultValue`.
+ * neither a supplied run-time value nor a `defaultValue`. `RUN_RECORD_NOT_FOUND` (#115) is
+ * a {@link WorkflowRunStore} operation's equivalent of `WORKFLOW_NOT_FOUND`.
  */
 export type WorkflowErrorCode =
   | 'WORKFLOW_NOT_FOUND'
@@ -15,7 +16,8 @@ export type WorkflowErrorCode =
   | 'STORAGE_FAILED'
   | 'PARAM_NOT_DECLARED'
   | 'PARAM_DUPLICATE'
-  | 'PARAM_VALUE_MISSING';
+  | 'PARAM_VALUE_MISSING'
+  | 'RUN_RECORD_NOT_FOUND';
 
 /** Typed error raised by a {@link WorkflowStore} operation, or by param validation/resolution. */
 export class WorkflowError extends AegisError {

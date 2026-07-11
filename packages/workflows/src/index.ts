@@ -1,5 +1,5 @@
-export type { WorkflowId, WorkflowStepId } from './ids';
-export { toWorkflowId, toWorkflowStepId } from './ids';
+export type { RunRecordId, WorkflowId, WorkflowStepId } from './ids';
+export { toRunRecordId, toWorkflowId, toWorkflowStepId } from './ids';
 
 export type { WorkflowErrorCode } from './errors';
 export { WorkflowError } from './errors';
@@ -78,3 +78,20 @@ export type {
   RunWithHealingDeps,
 } from './heal/run-workflow-with-healing';
 export { runWorkflowWithHealing } from './heal/run-workflow-with-healing';
+
+export type { RunRecordStatus, WorkflowRunRecord } from './background/run-record';
+export {
+  RunRecordIdSchema,
+  RunRecordStatusSchema,
+  WorkflowRunRecordSchema,
+} from './background/run-record';
+export type {
+  NewRunRecordInput,
+  RunRecordPatch,
+  WorkflowRunStore,
+} from './background/run-record-store';
+export { createWorkflowRunStore } from './background/run-record-store';
+export type { RunConcurrencyLimiter } from './background/run-concurrency';
+export { createRunConcurrencyLimiter } from './background/run-concurrency';
+export type { BackgroundRunDeps } from './background/run-workflow-in-background';
+export { runWorkflowInBackground } from './background/run-workflow-in-background';
