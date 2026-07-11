@@ -148,6 +148,163 @@ describe('executeWorkflow', () => {
     expect(toolCalled).toBe(false);
   });
 
+  it("captures a succeeding tool call's own result value as the step output", async () => {
+    const context = contextFor({ onSend: () => ok(undefined) });
+    await context.session.attach();
+    const registry = new ToolRegistry();
+    registry.register({
+      id: 'mcp.weather.lookup',
+      source: 'mcp',
+      description: 'Look up the weather.',
+      inputSchema: z.object({}),
+      risk: 'read',
+      execute: () => Promise.resolve(ok({ tempC: 20 })),
+    });
+
+    const outcome = await executeWorkflow(
+      [step({ toolId: 'mcp.weather.lookup', args: {} })],
+      registry,
+      context,
+      context.session,
+    );
+
+    expect(outcome.kind).toBe('completed');
+    expect(outcome.steps[0]?.output).toEqual({ tempC: 20 });
+  });
+
+  it('fails a step whose expect post-condition is not met, capturing the output and a needsHealing signal', async () => {
+    const context = contextFor({
+      onSend: (method) => {
+        if (method === 'DOM.getDocument') {
+          return ok({ root: { nodeId: 1 } });
+        }
+        if (method === 'DOM.querySelector') {
+          return ok({ nodeId: 0 });
+        }
+        return ok(undefined);
+      },
+    });
+    await context.session.attach();
+    const registry = new ToolRegistry();
+    registry.register({
+      id: 'mcp.checkout.submit',
+      source: 'mcp',
+      description: 'Submit checkout.',
+      inputSchema: z.object({}),
+      risk: 'state_changing',
+      execute: () => Promise.resolve(ok({ confirmationId: 'abc' })),
+    });
+    const withExpect = step({
+      toolId: 'mcp.checkout.submit',
+      args: {},
+      expect: { type: 'element_visible', selector: '#confirmation' },
+    });
+
+    const outcome = await executeWorkflow([withExpect], registry, context, context.session);
+
+    expect(outcome.kind).toBe('failed');
+    if (outcome.kind === 'failed') {
+      expect(outcome.needsHealing.stepId).toBe('step-1');
+      expect(outcome.needsHealing.reason).toBe('post_condition_failed');
+      expect(outcome.needsHealing.message).toContain('element_visible');
+      expect(outcome.steps[0]?.succeeded).toBe(false);
+      expect(outcome.steps[0]?.output).toEqual({ confirmationId: 'abc' });
+    }
+  });
+
+  it('continues past a step whose expect post-condition is met', async () => {
+    const context = contextFor({
+      onSend: (method) => {
+        if (method === 'DOM.getDocument') {
+          return ok({ root: { nodeId: 1 } });
+        }
+        if (method === 'DOM.querySelector') {
+          return ok({ nodeId: 42 });
+        }
+        if (method === 'DOM.resolveNode') {
+          return ok({ object: { objectId: 'obj-1' } });
+        }
+        if (method === 'Runtime.callFunctionOn') {
+          return ok({ result: { value: true } });
+        }
+        return ok(undefined);
+      },
+    });
+    await context.session.attach();
+    const registry = createDefaultToolRegistry();
+    const withExpect = step({ expect: { type: 'element_visible', selector: '#confirmation' } });
+
+    const outcome = await executeWorkflow([withExpect], registry, context, context.session);
+
+    expect(outcome.kind).toBe('completed');
+  });
+
+  it('carries a needsHealing signal for a target-resolution failure', async () => {
+    const context = contextFor({
+      onSend: (method) => {
+        if (method === 'DOM.resolveNode') {
+          return err(new Error('detached') as never);
+        }
+        if (method === 'DOM.getDocument') {
+          return ok({ root: { nodeId: 1 } });
+        }
+        if (method === 'DOM.querySelector') {
+          return ok({ nodeId: 0 });
+        }
+        return ok(undefined);
+      },
+    });
+    await context.session.attach();
+    const registry = new ToolRegistry();
+    registry.register({
+      id: 'browser.click',
+      source: 'browser',
+      description: 'Click.',
+      inputSchema: z.object({ type: z.literal('click'), ref: z.string() }),
+      risk: 'read',
+      execute: () => Promise.resolve(ok(undefined)),
+    });
+    const withTarget = step({
+      toolId: 'browser.click',
+      args: { type: 'click', ref: 'ax:1' },
+      target: { ref: 'ax:1', selector: '#gone' },
+    });
+
+    const outcome = await executeWorkflow([withTarget], registry, context, context.session);
+
+    expect(outcome.kind).toBe('failed');
+    if (outcome.kind === 'failed') {
+      expect(outcome.needsHealing.reason).toBe('target_not_found');
+      expect(outcome.needsHealing.stepId).toBe('step-1');
+    }
+  });
+
+  it('carries a needsHealing signal for a tool-call failure', async () => {
+    const context = contextFor({ onSend: () => ok(undefined) });
+    await context.session.attach();
+    const registry = new ToolRegistry();
+    registry.register({
+      id: 'mcp.broken.tool',
+      source: 'mcp',
+      description: 'Always fails.',
+      inputSchema: z.object({}),
+      risk: 'read',
+      execute: () => Promise.resolve(err(new ToolExecutionError('TOOL_EXECUTION_FAILED', 'nope'))),
+    });
+
+    const outcome = await executeWorkflow(
+      [step({ toolId: 'mcp.broken.tool', args: {} })],
+      registry,
+      context,
+      context.session,
+    );
+
+    expect(outcome.kind).toBe('failed');
+    if (outcome.kind === 'failed') {
+      expect(outcome.needsHealing.reason).toBe('tool_call_failed');
+    }
+  });
+
   it('reports aborted when the signal is already aborted', async () => {
     const context = contextFor({ onSend: () => ok(undefined) });
     await context.session.attach();

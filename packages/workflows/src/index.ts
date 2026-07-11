@@ -48,6 +48,12 @@ export { resolveWorkflowParams, validateWorkflowParams } from './params/resolve-
 export type { WorkflowExecutionErrorCode } from './executor/executor-error';
 export { WorkflowExecutionError } from './executor/executor-error';
 export { resolveStepTarget } from './executor/resolve-target';
-export type { WorkflowRunOutcome, WorkflowStepResult } from './executor/execute-workflow';
+export { evaluatePostCondition } from './executor/evaluate-post-condition';
+export type {
+  NeedsHealingReason,
+  NeedsHealingSignal,
+  WorkflowRunOutcome,
+  WorkflowStepResult,
+} from './executor/execute-workflow';
 export { executeWorkflow } from './executor/execute-workflow';
 export { runWorkflow } from './executor/run-workflow';

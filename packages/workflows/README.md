@@ -176,3 +176,26 @@ Neither the recorded `ref` nor the `selector` resolving is a real, expected fail
 (`TARGET_NOT_FOUND`) — this executor stops the run there rather than trying to recover;
 self-healing that (re-locating the element via the LLM, patching the workflow) is #113's
 job, not this deterministic path's (`docs/adr/0045-deterministic-workflow-executor.md`).
+
+## Step verification & result capture (#112)
+
+A step's tool call reporting success only proves the browser didn't error — a `click`
+that lands on the wrong element still "succeeds." After a successful tool call,
+`executeWorkflow` also evaluates the step's `expect` `PostCondition` (if declared) via
+`evaluatePostCondition(condition, session)`:
+
+- `element_visible` / `element_hidden` — resolves the condition's `selector` on the
+  current page and checks `getComputedStyle`/`getClientRects()`; a selector matching
+  nothing is a legitimate `false`/`true` result, not an error.
+- `url_matches` — tests a regex `pattern` against `window.location.href`.
+- `text_contains` — checks whether `document.body.innerText` contains `text`.
+
+Every `WorkflowStepResult` also now captures `output?: unknown` — the tool call's own
+`Result.value` (an `extract` step's read text, an MCP tool's response) — whenever the tool
+call itself succeeded, whether or not `expect` subsequently failed it.
+
+Any step failure — target resolution, the tool call itself, or an unmet post-condition —
+attaches a typed `NeedsHealingSignal` (`{ stepId, reason, message }`,
+`reason: 'target_not_found' | 'tool_call_failed' | 'post_condition_failed'`) to the
+`failed` `WorkflowRunOutcome`. This issue only detects and reports it; acting on it (a
+repair attempt) is #113's job (`docs/adr/0046-step-verification-result-capture.md`).
