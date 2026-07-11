@@ -19,6 +19,12 @@ import {
 import type { WebMcpSource } from '@aegis/mcp';
 import { sanitizePageContent } from '@aegis/security';
 import type { StoragePort } from '@aegis/shared';
+import {
+  createRunRecorder,
+  createWorkflowStore,
+  toWorkflowId,
+  type RunRecorder,
+} from '@aegis/workflows';
 import { createActor, type Snapshot } from 'xstate';
 import { z } from 'zod';
 
@@ -93,9 +99,13 @@ export function createRunManager(
   }),
 ): RunManager {
   const ports = new Set<BackgroundPort>();
+  const workflowStore = createWorkflowStore(localStorage);
   let activeActor: LoopActorHandle | undefined;
   let stopPersisting: (() => void) | undefined;
   let trace: TraceStep[] = [];
+  /** The most recently *completed* run's recorder + tab (#121) — overwritten, not appended, the moment the next run starts (mirrors `trace`'s own reset-on-`START_RUN` lifetime); `undefined` once no completed-but-unsaved run exists. */
+  let completedRecorder: RunRecorder | undefined;
+  let completedTabId: number | undefined;
 
   function broadcast(message: BackgroundToPanelMessage): void {
     for (const port of ports) {
@@ -123,6 +133,8 @@ export function createRunManager(
     actor: LoopActorHandle,
     detach: () => Promise<unknown>,
     toolRegistry: ToolRegistry,
+    recorder: RunRecorder,
+    tabId: number,
   ): void {
     stopPersisting?.();
     stopPersisting = persistAgentLoopOnTransition(actor, sessionStorage);
@@ -145,6 +157,7 @@ export function createRunManager(
           void persistTrace();
           broadcast({ type: 'TRACE_STEP', step });
         }
+        void recorder.recordCycle(snapshot.context);
       }
       previousValue = snapshot.value;
 
@@ -154,6 +167,10 @@ export function createRunManager(
         void clearAgentLoopSnapshot(sessionStorage);
         void detach();
         activeActor = undefined;
+        if (summarizeLoopRun(snapshot).outcome === 'done') {
+          completedRecorder = recorder;
+          completedTabId = tabId;
+        }
       }
     });
   }
@@ -183,6 +200,8 @@ export function createRunManager(
     trace = [];
     await persistTrace();
     broadcast({ type: 'TRACE_SNAPSHOT', steps: [...trace] });
+    completedRecorder = undefined;
+    completedTabId = undefined;
 
     const machine = createAgentLoopMachine(
       built.services,
@@ -192,8 +211,64 @@ export function createRunManager(
     );
     const actor = createActor(machine, { input: { task, tabId } });
     activeActor = actor;
-    attachLifecycle(actor, () => built.detach(), built.toolRegistry);
+    attachLifecycle(
+      actor,
+      () => built.detach(),
+      built.toolRegistry,
+      createRunRecorder(built.executorContext.session),
+      tabId,
+    );
     actor.start();
+  }
+
+  async function saveAsWorkflow(requester: BackgroundPort, name: string): Promise<void> {
+    if (completedRecorder === undefined || completedTabId === undefined) {
+      requester.send({
+        type: 'SAVE_AS_WORKFLOW_FAILED',
+        reason: 'No completed run is available to save yet',
+      });
+      return;
+    }
+    if (completedRecorder.steps.length === 0) {
+      requester.send({
+        type: 'SAVE_AS_WORKFLOW_FAILED',
+        reason: 'This run recorded no steps',
+      });
+      return;
+    }
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) {
+      requester.send({ type: 'SAVE_AS_WORKFLOW_FAILED', reason: 'Enter a name' });
+      return;
+    }
+
+    let origin: string;
+    try {
+      const tab = await chrome.tabs.get(completedTabId);
+      if (tab.url === undefined) {
+        throw new Error('Tab has no readable URL');
+      }
+      origin = new URL(tab.url).origin;
+    } catch (cause) {
+      requester.send({
+        type: 'SAVE_AS_WORKFLOW_FAILED',
+        reason: `Could not determine the run's origin: ${cause instanceof Error ? cause.message : String(cause)}`,
+      });
+      return;
+    }
+
+    const result = await workflowStore.createWorkflow({
+      id: toWorkflowId(crypto.randomUUID()),
+      name: trimmedName,
+      origin,
+      steps: [...completedRecorder.steps],
+      authorization: { allowedToolIds: [], allowedOrigins: [], allowStateChanging: false },
+    });
+    if (result.ok) {
+      requester.send({ type: 'WORKFLOW_SAVED', workflowId: result.value.id });
+    } else {
+      requester.send({ type: 'SAVE_AS_WORKFLOW_FAILED', reason: result.error.message });
+    }
   }
 
   return {
@@ -236,6 +311,9 @@ export function createRunManager(
             if (activeActor !== undefined) {
               editLoop(activeActor, message.actions);
             }
+            return;
+          case 'SAVE_AS_WORKFLOW':
+            void saveAsWorkflow(port, message.name);
             return;
           default:
             return;
@@ -286,7 +364,16 @@ export function createRunManager(
         snapshot: hydrateResult.value as Snapshot<unknown>,
       });
       activeActor = actor;
-      attachLifecycle(actor, () => built.detach(), built.toolRegistry);
+      // A fresh recorder, not a resumed one: cycles from before the eviction aren't
+      // reconstructable, only the loop's own persisted snapshot is — a workflow saved
+      // from a resumed-then-completed run only captures steps recorded after resumption.
+      attachLifecycle(
+        actor,
+        () => built.detach(),
+        built.toolRegistry,
+        createRunRecorder(built.executorContext.session),
+        tabId,
+      );
       actor.start();
     },
   };

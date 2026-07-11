@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 import { ConfirmationModal } from './confirmation-modal';
+import { SaveAsWorkflowForm } from './save-as-workflow-form';
 import { useRunStore } from './store';
 import { TraceList } from './trace-list';
 
@@ -39,6 +40,8 @@ export default function App(): React.JSX.Element {
   const approveConfirmation = useRunStore((s) => s.approveConfirmation);
   const rejectConfirmation = useRunStore((s) => s.rejectConfirmation);
   const editConfirmation = useRunStore((s) => s.editConfirmation);
+  const saveWorkflowStatus = useRunStore((s) => s.saveWorkflowStatus);
+  const saveAsWorkflow = useRunStore((s) => s.saveAsWorkflow);
 
   const [tabLookupError, setTabLookupError] = useState<string | undefined>(undefined);
 
@@ -134,6 +137,10 @@ export default function App(): React.JSX.Element {
           </p>
         ) : null}
       </div>
+
+      {status === 'done' ? (
+        <SaveAsWorkflowForm saveWorkflowStatus={saveWorkflowStatus} onSave={saveAsWorkflow} />
+      ) : null}
 
       <TraceList steps={trace} />
 

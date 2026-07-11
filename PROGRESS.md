@@ -123,7 +123,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #118 P3-11 Workflow library UI — blocked by: #112
 - [x] #119 P3-12 Workflow builder/editor — blocked by: #118, #117
 - [x] #120 P3-13 Workflow evals + security suite — blocked by: #119
-- [ ] #121 P3-14 Docs + v0.3 — blocked by: #120
+- [x] #121 P3-14 Docs + v0.3 — blocked by: #120
 
 ## ADR log
 
@@ -559,6 +559,15 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   unfixed, out of scope) a pre-existing `packages/agent` gap: an element's accessible
   `name` is never sanitized in the Navigator's prompt, only free-text page content and
   tool descriptions are.
+- [0055](docs/adr/0055-v0-3-0-release.md) — v0.3.0 release (Phase 3, issue #121): while
+  writing user-facing docs, discovered a real blocking gap — `createRunRecorder` (#109)
+  was never actually wired into the live agent loop, so there was no way in the shipped
+  UI to create a workflow at all. Fixed as part of this issue: `background/run-manager.ts`
+  now records every run, and the side panel gains a real "Save as workflow" action once a
+  run reaches Done (`e2e/save-as-workflow.spec.ts` proves it end-to-end). Root `README.md`
+  gains a "Workflows" section; `apps/extension/README.md` backfills sections for
+  #115–#121; `docs/DESIGN.md` gains §17; `CHANGELOG.md` gains `[0.3.0]`; every package
+  bumped to `0.3.0`; tagged `v0.3.0`.
 
 ## Notes
 
@@ -673,3 +682,10 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   RunPolicy allow-list. Surfaced (and deliberately left open) a pre-existing
   `packages/agent` gap: an element's accessible name is never sanitized in the Navigator's
   prompt. Next up, #121 (docs + v0.3) is the last issue in Phase 3.
+- #121 (docs + v0.3) merged 2026-07-11 — see ADR 0055. Final issue in Phase 3. While
+  writing the docs, discovered "record a workflow" had no real UI path at all despite
+  #109's own recorder existing since M13 — fixed as part of this issue (real "Save as
+  workflow" wiring in `run-manager.ts` + the side panel, proven end-to-end by a new E2E
+  spec), not just documented as a gap. README/DESIGN/CHANGELOG updated, every package
+  bumped to `0.3.0`. **Phase 3 complete: all of M13–M17 (#108–#121) implemented, gated,
+  and tested; `v0.3.0` tagged.**

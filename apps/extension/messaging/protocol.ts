@@ -16,7 +16,9 @@ export type PanelToBackgroundMessage =
   | { readonly type: 'RESUME_RUN' }
   | { readonly type: 'APPROVE_RUN' }
   | { readonly type: 'REJECT_RUN' }
-  | { readonly type: 'EDIT_RUN'; readonly actions: readonly Action[] };
+  | { readonly type: 'EDIT_RUN'; readonly actions: readonly Action[] }
+  /** Saves the most recently *completed* (`status: 'done'`) run's recorded steps as a reusable `@aegis/workflows` `Workflow` (#121) — cleared the moment a new run starts, the same lifetime `RunManager`'s own trace already has. */
+  | { readonly type: 'SAVE_AS_WORKFLOW'; readonly name: string };
 
 /**
  * Messages the background sends back. `RUN_IDLE` means no run has ever started (or the
@@ -33,4 +35,6 @@ export type BackgroundToPanelMessage =
   | { readonly type: 'RUN_STATUS'; readonly summary: LoopRunSummary }
   | { readonly type: 'RUN_START_FAILED'; readonly reason: string }
   | { readonly type: 'TRACE_SNAPSHOT'; readonly steps: readonly TraceStep[] }
-  | { readonly type: 'TRACE_STEP'; readonly step: TraceStep };
+  | { readonly type: 'TRACE_STEP'; readonly step: TraceStep }
+  | { readonly type: 'WORKFLOW_SAVED'; readonly workflowId: string }
+  | { readonly type: 'SAVE_AS_WORKFLOW_FAILED'; readonly reason: string };
