@@ -96,6 +96,35 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 - [x] #92 P2-13 Tool-use evals + security suite — blocked by: #91
 - [x] #93 P2-14 Docs + v0.2 — blocked by: #92
 
+### M13 — Workflow model & recording
+
+- [ ] #108 P3-1 Workflow data model + storage — blocked by: none
+- [ ] #109 P3-2 Run recorder — blocked by: #108
+- [ ] #110 P3-3 Parameterization — blocked by: #109
+
+### M14 — Deterministic execution
+
+- [ ] #111 P3-4 Deterministic workflow executor — blocked by: #110
+- [ ] #112 P3-5 Step verification + result capture — blocked by: #111
+
+### M15 — Self-healing
+
+- [ ] #113 P3-6 Failure detection + self-heal — blocked by: #112
+- [ ] #114 P3-7 Healing safety & review — blocked by: #113
+
+### M16 — Scheduling & background runs
+
+- [ ] #115 P3-8 Background run engine — blocked by: #111
+- [ ] #116 P3-9 Scheduler + triggers — blocked by: #115
+- [ ] #117 P3-10 Unattended-mode guardrails — blocked by: #116, #114
+
+### M17 — Workflow UX, evals, release
+
+- [ ] #118 P3-11 Workflow library UI — blocked by: #112
+- [ ] #119 P3-12 Workflow builder/editor — blocked by: #118, #117
+- [ ] #120 P3-13 Workflow evals + security suite — blocked by: #119
+- [ ] #121 P3-14 Docs + v0.3 — blocked by: #120
+
 ## ADR log
 
 - [0001](docs/adr/0001-ollama-via-openai-compatible.md) — Ollama support implemented as a
@@ -447,3 +476,7 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   README and `docs/DESIGN.md` §16; every package bumped to `0.2.0`; `CHANGELOG.md` gains
   a `[0.2.0]` entry. Final issue in M12 — every Phase 2 issue (#80–#93) closed.
 - v0.2.0 (2026-07-10): Phase 2 release. See `CHANGELOG.md` and the `v0.2.0` tag.
+- Phase 3 (workflows & autonomy: record → compile → run, self-heal, scheduling) kicked
+  off 2026-07-11 per `PHASE_3_PROMPT.md`. Milestones M13–M17 and issues #108–#121 created
+  (backlog P3-1…P3-14 map 1:1 to #108…#121 in listed order). Work proceeds via the same
+  per-issue loop as Phases 1 and 2.
