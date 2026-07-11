@@ -17,6 +17,16 @@ export { startStaticServer } from './static-server';
 export { seedModelRoutingConfig } from './seed-chrome-storage';
 export type { McpServerSeed } from './seed-mcp-chrome-storage';
 export { seedMcpServer } from './seed-mcp-chrome-storage';
+export type {
+  WorkflowRunRecordSnapshot,
+  WorkflowSeed,
+  WorkflowStepSeed,
+} from './seed-workflow-chrome-storage';
+export {
+  readWorkflowRuns,
+  seedWorkflows,
+  waitForWorkflowRuns,
+} from './seed-workflow-chrome-storage';
 export { findRef } from './find-ref';
 export { FIXTURES_DIR } from './fixtures-dir';
 
@@ -91,3 +101,11 @@ export {
   HOSTILE_MCP_TOOL_ID,
   createHostileMcpToolConfirmationResponder,
 } from './scenarios/hostile-mcp-tool-confirmation';
+export {
+  WORKFLOW_HEAL_FIXTURE_V1,
+  WORKFLOW_HEAL_FIXTURE_V2,
+  WORKFLOW_HEAL_INJECTED_FIXTURE,
+  createWorkflowHealHostileResponder,
+  createWorkflowHealResponder,
+  workflowHealSeed,
+} from './scenarios/workflow-self-heal';

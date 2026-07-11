@@ -61,3 +61,18 @@ without the right content, still fails (`src/scorer.ts`). `src/runner.ts` drives
 actual browser (via `@aegis/eval-harness`) and polls the side panel's own rendered text
 for a terminal status word rather than reaching into any internal state — the same
 signal a human watching the side panel would see.
+
+## The workflow self-heal eval (#120)
+
+A separate, parallel eval path (`src/workflow-runner.ts`/`workflow-scorer.ts`/
+`workflow-report.ts`), always run in mock mode, printed after `TASK_SET`'s own report:
+proves deterministic replay and self-heal across a simulated site change, and measures
+the "planner-call reduction" a compiled workflow gets over a live re-plan. It seeds two
+copies of the same recorded one-step workflow directly into `chrome.storage.local`
+(`@aegis/eval-harness`'s `seedWorkflows`) — one pointed at the exact page it was recorded
+on, one pointed at a page where the same button's id changed (its accessible role/name
+didn't) — triggers each via the real options page's "Run" action, and observes the
+outcome by polling `chrome.storage.local`'s `workflow-runs` key directly
+(`waitForWorkflowRuns`) rather than any rendered UI, since a background run has no UI open
+in production. It passes only if the clean replay completes with **zero** model calls and
+the healed replay completes with a small, bounded number (1-2) — see ADR 0054.

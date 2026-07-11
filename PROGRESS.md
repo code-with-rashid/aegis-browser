@@ -122,7 +122,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #118 P3-11 Workflow library UI — blocked by: #112
 - [x] #119 P3-12 Workflow builder/editor — blocked by: #118, #117
-- [ ] #120 P3-13 Workflow evals + security suite — blocked by: #119
+- [x] #120 P3-13 Workflow evals + security suite — blocked by: #119
 - [ ] #121 P3-14 Docs + v0.3 — blocked by: #120
 
 ## ADR log
@@ -545,6 +545,20 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   — this issue is UI-only, no domain-package changes. "Version history" shows `version`/
   `updatedAt`, the level the data model actually supports; a real snapshot timeline is
   future work.
+- [0054](docs/adr/0054-workflow-evals-security-suite.md) — Workflow evals + security suite
+  (Phase 3, issue #120): a new, parallel eval path (`evals/src/workflow-runner.ts`) proves
+  deterministic replay and self-heal across a simulated site change end-to-end — clean
+  replay completes with zero model calls, a healed replay (the recorded button's id
+  changed but not its accessible name) completes via a small, bounded number of Navigator-
+  only calls, both triggered through the real options-page "Run" action and observed by
+  polling `chrome.storage.local` directly. A new Playwright E2E spec,
+  `apps/extension/e2e/workflow-unattended-security.spec.ts`, proves an injected page
+  instruction can't cause an unauthorized state change during a background self-heal
+  (`gateHeal` hard-stops it regardless) and that an out-of-allow-list step never executes
+  even when its target genuinely exists. Along the way, discovered (and deliberately left
+  unfixed, out of scope) a pre-existing `packages/agent` gap: an element's accessible
+  `name` is never sanitized in the Navigator's prompt, only free-text page content and
+  tool descriptions are.
 
 ## Notes
 
@@ -651,3 +665,11 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   `WorkflowScheduleStore`. Confirmed every capability needed already existed in
   `@aegis/workflows` since #108-#116 — purely a UI issue, no domain-package changes. Next
   up, #120 (workflow evals + security suite) is the last issue before docs + the v0.3 tag.
+- #120 (workflow evals + security suite) merged 2026-07-11 — see ADR 0054. Final issue in
+  M17 before docs + release; `pnpm eval` now proves self-heal end-to-end (clean replay: 0
+  model calls; healed replay after a simulated site change: completes via 1-2 Navigator-
+  only calls), and a new E2E spec proves an unattended background run can't be hijacked
+  into an unauthorized state change by injected page content or a step outside its
+  RunPolicy allow-list. Surfaced (and deliberately left open) a pre-existing
+  `packages/agent` gap: an element's accessible name is never sanitized in the Navigator's
+  prompt. Next up, #121 (docs + v0.3) is the last issue in Phase 3.
