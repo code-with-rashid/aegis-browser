@@ -5,7 +5,11 @@ import {
 } from '@aegis/mcp';
 import { createPolicyStore, createSecretVault } from '@aegis/security';
 import { createChromeStorageAdapter } from '@aegis/shared';
-import { createWorkflowRunStore, createWorkflowStore } from '@aegis/workflows';
+import {
+  createWorkflowRunStore,
+  createWorkflowScheduleStore,
+  createWorkflowStore,
+} from '@aegis/workflows';
 import { useState } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -30,6 +34,7 @@ const mcpToolPolicyStore = createMcpToolPolicyStore(storage);
 const webMcpSettingsStore = createWebMcpSettingsStore(storage);
 const workflowStore = createWorkflowStore(storage);
 const workflowRunStore = createWorkflowRunStore(storage);
+const workflowScheduleStore = createWorkflowScheduleStore(storage);
 const workflowRunTrigger = createWorkflowRunTrigger(
   connectToBackgroundWorkflowBridge<
     OptionsToBackgroundWorkflowMessage,
@@ -90,6 +95,7 @@ export default function App(): React.JSX.Element {
           <WorkflowLibraryPanel
             workflowStore={workflowStore}
             runStore={workflowRunStore}
+            scheduleStore={workflowScheduleStore}
             runTrigger={workflowRunTrigger}
           />
         ) : null}

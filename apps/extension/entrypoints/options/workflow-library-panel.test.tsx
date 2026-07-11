@@ -5,6 +5,7 @@ import type {
   WorkflowParam,
   WorkflowRunRecord,
   WorkflowRunStore,
+  WorkflowScheduleStore,
   WorkflowStepResult,
   WorkflowStore,
 } from '@aegis/workflows';
@@ -131,6 +132,27 @@ function createFakeWorkflowRunStore(seed: readonly WorkflowRunRecord[] = []): Wo
   };
 }
 
+function createFakeScheduleStore(): WorkflowScheduleStore {
+  return {
+    getSchedule: () => Promise.resolve(ok(undefined)),
+    upsertSchedule: (input) =>
+      Promise.resolve(
+        ok({
+          workflowId: input.workflowId,
+          enabled: input.enabled,
+          trigger: input.trigger,
+          values: input.values ?? {},
+          createdAt: 0,
+          updatedAt: 0,
+        }),
+      ),
+    updateSchedule: () =>
+      Promise.resolve(err(new WorkflowError('WORKFLOW_NOT_FOUND', 'not implemented in this fake'))),
+    removeSchedule: () => Promise.resolve(ok(undefined)),
+    listSchedules: () => Promise.resolve(ok([])),
+  };
+}
+
 interface FakeTriggerCall {
   readonly workflowId: string;
   readonly values: Readonly<Record<string, string>>;
@@ -157,6 +179,7 @@ describe('WorkflowLibraryPanel', () => {
       <WorkflowLibraryPanel
         workflowStore={createFakeWorkflowStore()}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
       />,
     );
@@ -169,6 +192,7 @@ describe('WorkflowLibraryPanel', () => {
       <WorkflowLibraryPanel
         workflowStore={createFakeWorkflowStore([workflowFixture({ name: 'Reorder oat milk' })])}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
       />,
     );
@@ -190,6 +214,7 @@ describe('WorkflowLibraryPanel', () => {
           workflowFixture({ params: [valueParam, secretParam] }),
         ])}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
       />,
     );
@@ -209,6 +234,7 @@ describe('WorkflowLibraryPanel', () => {
       <WorkflowLibraryPanel
         workflowStore={createFakeWorkflowStore([workflowFixture({ params: [valueParam] })])}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={trigger}
       />,
     );
@@ -231,6 +257,7 @@ describe('WorkflowLibraryPanel', () => {
       <WorkflowLibraryPanel
         workflowStore={createFakeWorkflowStore([workflowFixture()])}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={trigger}
       />,
     );
@@ -248,6 +275,7 @@ describe('WorkflowLibraryPanel', () => {
       <WorkflowLibraryPanel
         workflowStore={createFakeWorkflowStore([workflowFixture()])}
         runStore={createFakeWorkflowRunStore([runRecordFixture()])}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
       />,
     );
@@ -266,6 +294,7 @@ describe('WorkflowLibraryPanel', () => {
       <WorkflowLibraryPanel
         workflowStore={createFakeWorkflowStore([workflowFixture()])}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
       />,
     );
@@ -276,20 +305,44 @@ describe('WorkflowLibraryPanel', () => {
     expect(await screen.findByText('No runs yet.')).toBeInTheDocument();
   });
 
-  it('editing the name and saving persists it via updateWorkflow', async () => {
-    const workflowStore = createFakeWorkflowStore([workflowFixture()]);
+  it('"Edit" swaps the list for the WorkflowBuilderPanel, and "Back to list" returns to it', async () => {
     const user = userEvent.setup();
     render(
       <WorkflowLibraryPanel
-        workflowStore={workflowStore}
+        workflowStore={createFakeWorkflowStore([workflowFixture()])}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
       />,
     );
 
     await screen.findByText('Reorder oat milk');
     await user.click(screen.getByRole('button', { name: 'Edit' }));
-    const nameInput = screen.getByLabelText('Name');
+
+    expect(screen.getByText('Edit workflow')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Back to list' }));
+
+    expect(screen.getByText('Reorder oat milk')).toBeInTheDocument();
+    expect(screen.queryByText('Edit workflow')).not.toBeInTheDocument();
+  });
+
+  it('saving in the builder persists the new name back in the list', async () => {
+    const workflowStore = createFakeWorkflowStore([workflowFixture()]);
+    const user = userEvent.setup();
+    render(
+      <WorkflowLibraryPanel
+        workflowStore={workflowStore}
+        runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
+        runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
+      />,
+    );
+
+    await screen.findByText('Reorder oat milk');
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    const nameInput = screen.getByDisplayValue('Reorder oat milk');
     await user.clear(nameInput);
     await user.type(nameInput, 'Renamed workflow');
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -299,27 +352,6 @@ describe('WorkflowLibraryPanel', () => {
     expect(result.ok && result.value?.name).toBe('Renamed workflow');
   });
 
-  it('rejects saving a blank name without calling updateWorkflow', async () => {
-    const workflowStore = createFakeWorkflowStore([workflowFixture()]);
-    const user = userEvent.setup();
-    render(
-      <WorkflowLibraryPanel
-        workflowStore={workflowStore}
-        runStore={createFakeWorkflowRunStore()}
-        runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
-      />,
-    );
-
-    await screen.findByText('Reorder oat milk');
-    await user.click(screen.getByRole('button', { name: 'Edit' }));
-    await user.clear(screen.getByLabelText('Name'));
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-
-    expect(await screen.findByText('Enter a name.')).toBeInTheDocument();
-    const result = await workflowStore.getWorkflow(toWorkflowId('workflow-1'));
-    expect(result.ok && result.value?.name).toBe('Reorder oat milk');
-  });
-
   it('deletes a workflow with no confirmation step', async () => {
     const workflowStore = createFakeWorkflowStore([workflowFixture()]);
     const user = userEvent.setup();
@@ -327,6 +359,7 @@ describe('WorkflowLibraryPanel', () => {
       <WorkflowLibraryPanel
         workflowStore={workflowStore}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
       />,
     );
@@ -341,12 +374,13 @@ describe('WorkflowLibraryPanel', () => {
     expect(result.ok && result.value).toEqual([]);
   });
 
-  it('Run/History/Edit buttons report aria-expanded matching the currently open section', async () => {
+  it('Run/History buttons report aria-expanded matching the currently open section', async () => {
     const user = userEvent.setup();
     render(
       <WorkflowLibraryPanel
         workflowStore={createFakeWorkflowStore([workflowFixture()])}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
       />,
     );
@@ -373,6 +407,7 @@ describe('WorkflowLibraryPanel', () => {
           workflowFixture({ id: toWorkflowId('workflow-a'), name: 'Apple workflow' }),
         ])}
         runStore={createFakeWorkflowRunStore()}
+        scheduleStore={createFakeScheduleStore()}
         runTrigger={createFakeRunTrigger(() => ok({ runId: 'run-1' })).trigger}
       />,
     );
