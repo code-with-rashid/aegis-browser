@@ -1,9 +1,11 @@
+import { createSecretVault } from '@aegis/security';
 import type { StoragePort } from '@aegis/shared';
 import { err, ok, type Result } from '@aegis/shared';
 import {
   createRunConcurrencyLimiter,
   createWorkflowRunStore,
   createWorkflowStore,
+  hasReachedDailyRunLimit,
   runWorkflowInBackground,
   toRunRecordId,
   type Workflow,
@@ -13,9 +15,14 @@ import {
 
 import { buildLoopServices } from './build-loop-services';
 import { closeManagedTab, openManagedTab } from './managed-tab';
+import { notifyRunBlocked } from './notify';
 
 export type BackgroundRunErrorCode =
-  'WORKFLOW_NOT_FOUND' | 'CONCURRENCY_LIMIT_REACHED' | 'TAB_OPEN_FAILED' | 'STORAGE_FAILED';
+  | 'WORKFLOW_NOT_FOUND'
+  | 'CONCURRENCY_LIMIT_REACHED'
+  | 'RATE_LIMIT_REACHED'
+  | 'TAB_OPEN_FAILED'
+  | 'STORAGE_FAILED';
 
 /** Plain, non-`AegisError` shape — mirrors `build-loop-services.ts`'s own `BuildLoopServicesError`, the established convention for this composition-root layer's own errors (distinct from a domain package's `AegisError` subclasses). */
 export interface BackgroundRunError {
@@ -42,13 +49,14 @@ export interface BackgroundRunManager {
 export function createBackgroundRunManager(
   /** `chrome.storage.local` in production — a run record must survive a browser restart, not just a service-worker eviction. */
   runStorage: StoragePort,
-  /** `chrome.storage.local` in production — where `WorkflowStore` and model routing config both live. */
+  /** `chrome.storage.local` in production — where `WorkflowStore`, model routing config, and the secret vault all live. */
   workflowStorage: StoragePort,
   maxConcurrentRuns: number,
   buildLoop: typeof buildLoopServices = buildLoopServices,
   openTab: typeof openManagedTab = openManagedTab,
   closeTab: typeof closeManagedTab = closeManagedTab,
   generateRunId: () => string = () => crypto.randomUUID(),
+  notify: typeof notifyRunBlocked = notifyRunBlocked,
 ): BackgroundRunManager {
   const runStore = createWorkflowRunStore(runStorage);
   const workflowStore = createWorkflowStore(workflowStorage);
@@ -82,12 +90,23 @@ export function createBackgroundRunManager(
       return;
     }
 
-    await runWorkflowInBackground(workflow, runRecord, runStore, workflowStore, {
+    // A fresh vault scoped to this call — the service worker has no way to share an
+    // *unlocked* vault with the options page's own instance (separate processes,
+    // `build-loop-services.ts`'s own MCP-secrets comment). A step needing a secret while
+    // the vault is locked hard-stops the run (`resolveStepArgsSecrets`) rather than ever
+    // sending the raw placeholder.
+    const vault = createSecretVault(workflowStorage);
+
+    const result = await runWorkflowInBackground(workflow, runRecord, runStore, workflowStore, {
       registry: built.toolRegistry,
       ctx: built.executorContext,
       session: built.executorContext.session,
       navigate: built.services.decide,
+      vault,
     });
+    if (result.ok && result.value.status === 'hard_stopped') {
+      await notify(workflow.name, result.value.reason ?? "Blocked by the workflow's RunPolicy");
+    }
 
     await built.detach();
     limiter.release();
@@ -102,6 +121,16 @@ export function createBackgroundRunManager(
       return err({
         code: 'CONCURRENCY_LIMIT_REACHED',
         message: 'Too many background runs are already in progress',
+      });
+    }
+
+    const history = await runStore.listRunsForWorkflow(workflow.id);
+    const recentStartTimes = history.ok ? history.value.map((record) => record.startedAt) : [];
+    if (hasReachedDailyRunLimit(workflow.authorization, recentStartTimes, Date.now())) {
+      limiter.release();
+      return err({
+        code: 'RATE_LIMIT_REACHED',
+        message: `Workflow "${workflow.name}" has already reached its maxRunsPerDay limit`,
       });
     }
 

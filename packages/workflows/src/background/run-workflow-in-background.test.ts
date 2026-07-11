@@ -7,6 +7,7 @@ import {
 import { createNavigatorService } from '@aegis/agent';
 import { createMockProvider, type LlmProvider, type ModelRouter } from '@aegis/llm';
 import { CdpError, createFakeCdp, type FakeCdp } from '@aegis/perception';
+import { createSecretVault, toSecretPlaceholder, type SecretVault } from '@aegis/security';
 import { createMemoryStorage, err, ok, toElementRef } from '@aegis/shared';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -16,6 +17,10 @@ import type { Workflow } from '../schema';
 import { createWorkflowStore } from '../store/workflow-store';
 import { createWorkflowRunStore } from './run-record-store';
 import { runWorkflowInBackground, type BackgroundRunDeps } from './run-workflow-in-background';
+
+function fakeVault(): SecretVault {
+  return createSecretVault(createMemoryStorage());
+}
 
 function routerFor(provider: LlmProvider): ModelRouter {
   return { resolve: () => ok(provider) };
@@ -134,7 +139,7 @@ describe('runWorkflowInBackground', () => {
     const provider = createMockProvider({ responses: [navigatorResponse()] });
     const navigate = createNavigatorService(routerFor(provider), registry);
     const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
-    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate };
+    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
     const workflowStore = createWorkflowStore(createMemoryStorage());
     const workflow = twoStepWorkflow();
     await workflowStore.createWorkflow(workflow);
@@ -182,7 +187,7 @@ describe('runWorkflowInBackground', () => {
     const provider = createMockProvider({ responses: [navigatorResponse()] });
     const navigate = createNavigatorService(routerFor(provider), registry);
     const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
-    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate };
+    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
     const workflowStore = createWorkflowStore(createMemoryStorage());
     const workflow = twoStepWorkflow();
     await workflowStore.createWorkflow(workflow);
@@ -246,7 +251,7 @@ describe('runWorkflowInBackground', () => {
     const provider = createMockProvider({ responses: [navigatorResponse()] });
     const navigate = createNavigatorService(routerFor(provider), registry);
     const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
-    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate };
+    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
     const workflowStore = createWorkflowStore(createMemoryStorage());
     const workflow = healableWorkflow();
     await workflowStore.createWorkflow(workflow);
@@ -288,7 +293,7 @@ describe('runWorkflowInBackground', () => {
     const provider = createMockProvider({ responses: [navigatorResponse()] });
     const navigate = createNavigatorService(routerFor(provider), registry);
     const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
-    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate };
+    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
     const workflowStore = createWorkflowStore(createMemoryStorage());
     const workflow = healableWorkflow();
     await workflowStore.createWorkflow(workflow);
@@ -348,7 +353,7 @@ describe('runWorkflowInBackground', () => {
     });
     const navigate = createNavigatorService(routerFor(provider), registry);
     const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
-    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate };
+    const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
     const workflowStore = createWorkflowStore(createMemoryStorage());
     const workflow = healableWorkflow();
     await workflowStore.createWorkflow(workflow);
@@ -372,5 +377,367 @@ describe('runWorkflowInBackground', () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.value.status).toBe('failed');
+  });
+
+  describe('unattended-mode guardrails (#117)', () => {
+    it('hard-stops before executing anything when the workflow exceeds maxStepsPerRun', async () => {
+      const cdp = createFakeCdp(1, { onSend: () => ok(undefined) });
+      await cdp.attach();
+      const registry = createDefaultToolRegistry();
+      const provider = createMockProvider({ responses: [navigatorResponse()] });
+      const navigate = createNavigatorService(routerFor(provider), registry);
+      const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
+      const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
+      const workflowStore = createWorkflowStore(createMemoryStorage());
+      const workflow: Workflow = {
+        ...twoStepWorkflow(),
+        authorization: {
+          allowedToolIds: [],
+          allowedOrigins: [],
+          allowStateChanging: false,
+          maxStepsPerRun: 1,
+        },
+      };
+      await workflowStore.createWorkflow(workflow);
+      const runStore = createWorkflowRunStore(createMemoryStorage());
+      const runRecord = await runStore.createRun({
+        id: toRunRecordId('run-1'),
+        workflowId: workflow.id,
+        values: {},
+      });
+      if (!runRecord.ok) {
+        throw new Error('expected a run record');
+      }
+
+      const result = await runWorkflowInBackground(
+        workflow,
+        runRecord.value,
+        runStore,
+        workflowStore,
+        deps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.value.status).toBe('hard_stopped');
+      expect(result.ok && result.value.reason).toContain('maxStepsPerRun');
+      expect(result.ok && result.value.nextStepIndex).toBe(0);
+    });
+
+    it("hard-stops before executing anything when the workflow's origin is outside the RunPolicy allow-list", async () => {
+      const cdp = createFakeCdp(1, { onSend: () => ok(undefined) });
+      await cdp.attach();
+      const registry = createDefaultToolRegistry();
+      const provider = createMockProvider({ responses: [navigatorResponse()] });
+      const navigate = createNavigatorService(routerFor(provider), registry);
+      const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
+      const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
+      const workflowStore = createWorkflowStore(createMemoryStorage());
+      const workflow: Workflow = {
+        ...twoStepWorkflow(),
+        authorization: {
+          allowedToolIds: [],
+          allowedOrigins: ['https://different.example.com'],
+          allowStateChanging: false,
+        },
+      };
+      await workflowStore.createWorkflow(workflow);
+      const runStore = createWorkflowRunStore(createMemoryStorage());
+      const runRecord = await runStore.createRun({
+        id: toRunRecordId('run-1'),
+        workflowId: workflow.id,
+        values: {},
+      });
+      if (!runRecord.ok) {
+        throw new Error('expected a run record');
+      }
+
+      const result = await runWorkflowInBackground(
+        workflow,
+        runRecord.value,
+        runStore,
+        workflowStore,
+        deps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.value.status).toBe('hard_stopped');
+      expect(result.ok && result.value.reason).toContain('Origin');
+    });
+
+    it('hard-stops on a recorded step whose tool id is outside the RunPolicy allow-list', async () => {
+      const cdp = createFakeCdp(1, { onSend: () => ok(undefined) });
+      await cdp.attach();
+      const registry = createDefaultToolRegistry();
+      const provider = createMockProvider({ responses: [navigatorResponse()] });
+      const navigate = createNavigatorService(routerFor(provider), registry);
+      const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
+      const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
+      const workflowStore = createWorkflowStore(createMemoryStorage());
+      const workflow: Workflow = {
+        ...twoStepWorkflow(),
+        authorization: {
+          allowedToolIds: ['browser.click'], // the workflow's own steps use browser.wait
+          allowedOrigins: [],
+          allowStateChanging: false,
+        },
+      };
+      await workflowStore.createWorkflow(workflow);
+      const runStore = createWorkflowRunStore(createMemoryStorage());
+      const runRecord = await runStore.createRun({
+        id: toRunRecordId('run-1'),
+        workflowId: workflow.id,
+        values: {},
+      });
+      if (!runRecord.ok) {
+        throw new Error('expected a run record');
+      }
+
+      const result = await runWorkflowInBackground(
+        workflow,
+        runRecord.value,
+        runStore,
+        workflowStore,
+        deps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.value.status).toBe('hard_stopped');
+      expect(result.ok && result.value.reason).toContain('browser.wait');
+      expect(result.ok && result.value.nextStepIndex).toBe(0);
+    });
+
+    function stateChangingStepWorkflow(allowStateChanging: boolean): Workflow {
+      const now = 1_700_000_000_000;
+      return {
+        id: toWorkflowId('checkout'),
+        version: 0,
+        name: 'Checkout',
+        origin: 'https://shop.example.com',
+        params: [],
+        steps: [
+          {
+            stepId: toWorkflowStepId('step-1'),
+            toolId: 'browser.click',
+            args: { type: 'click', ref: 'ax:1' },
+            target: { ref: 'ax:1', name: 'Submit Order' },
+          },
+        ],
+        authorization: { allowedToolIds: [], allowedOrigins: [], allowStateChanging },
+        createdAt: now,
+        updatedAt: now,
+      };
+    }
+
+    it('hard-stops a recorded state-changing step when the policy does not authorize it unattended', async () => {
+      const cdp = createFakeCdp(1, { onSend: () => ok(undefined) });
+      await cdp.attach();
+      const registry = createDefaultToolRegistry();
+      const provider = createMockProvider({ responses: [navigatorResponse()] });
+      const navigate = createNavigatorService(routerFor(provider), registry);
+      const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
+      const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
+      const workflowStore = createWorkflowStore(createMemoryStorage());
+      const workflow = stateChangingStepWorkflow(false);
+      await workflowStore.createWorkflow(workflow);
+      const runStore = createWorkflowRunStore(createMemoryStorage());
+      const runRecord = await runStore.createRun({
+        id: toRunRecordId('run-1'),
+        workflowId: workflow.id,
+        values: {},
+      });
+      if (!runRecord.ok) {
+        throw new Error('expected a run record');
+      }
+
+      const result = await runWorkflowInBackground(
+        workflow,
+        runRecord.value,
+        runStore,
+        workflowStore,
+        deps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.value.status).toBe('hard_stopped');
+      expect(result.ok && result.value.reason).toContain('state-changing');
+    });
+
+    it('runs a recorded state-changing step when the policy authorizes it unattended', async () => {
+      const cdp = createFakeCdp(1, {
+        onSend: (method) => {
+          switch (method) {
+            case 'DOM.resolveNode':
+              return ok({ object: { objectId: 'obj-1' } });
+            case 'DOM.getBoxModel':
+              return ok({ model: { border: [0, 0, 10, 0, 10, 10, 0, 10] } });
+            default:
+              return ok(undefined);
+          }
+        },
+      });
+      await cdp.attach();
+      const registry = createDefaultToolRegistry();
+      const provider = createMockProvider({ responses: [navigatorResponse()] });
+      const navigate = createNavigatorService(routerFor(provider), registry);
+      const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
+      const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault: fakeVault() };
+      const workflowStore = createWorkflowStore(createMemoryStorage());
+      const workflow = stateChangingStepWorkflow(true);
+      await workflowStore.createWorkflow(workflow);
+      const runStore = createWorkflowRunStore(createMemoryStorage());
+      const runRecord = await runStore.createRun({
+        id: toRunRecordId('run-1'),
+        workflowId: workflow.id,
+        values: {},
+      });
+      if (!runRecord.ok) {
+        throw new Error('expected a run record');
+      }
+
+      const result = await runWorkflowInBackground(
+        workflow,
+        runRecord.value,
+        runStore,
+        workflowStore,
+        deps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.value.status).toBe('completed');
+    });
+
+    it("resolves a secret placeholder in a step's args to its real value before executing, never the placeholder", async () => {
+      const cdp = createFakeCdp(1, { onSend: () => ok(undefined) });
+      await cdp.attach();
+      const registry = new ToolRegistry();
+      let seenArgs: unknown;
+      registry.register({
+        id: 'browser.input_text',
+        source: 'browser',
+        description: 'Type.',
+        inputSchema: z.object({ type: z.literal('input_text'), ref: z.string(), text: z.string() }),
+        risk: 'input',
+        execute: (args) => {
+          seenArgs = args;
+          return Promise.resolve(ok({ kind: 'input_text' }));
+        },
+      });
+      const provider = createMockProvider({ responses: [navigatorResponse()] });
+      const navigate = createNavigatorService(routerFor(provider), registry);
+      const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
+      const vault = await (async () => {
+        const v = createSecretVault(createMemoryStorage());
+        await v.unlock('passphrase');
+        await v.setSecret('login_password', 'hunter2');
+        return v;
+      })();
+      const deps: BackgroundRunDeps = { registry, ctx, session: cdp, navigate, vault };
+      const workflowStore = createWorkflowStore(createMemoryStorage());
+      const now = 1_700_000_000_000;
+      const workflow: Workflow = {
+        id: toWorkflowId('login'),
+        version: 0,
+        name: 'Log in',
+        origin: 'https://shop.example.com',
+        params: [],
+        steps: [
+          {
+            stepId: toWorkflowStepId('step-1'),
+            toolId: 'browser.input_text',
+            args: {
+              type: 'input_text',
+              ref: 'ax:1',
+              text: toSecretPlaceholder('login_password'),
+            },
+          },
+        ],
+        authorization: { allowedToolIds: [], allowedOrigins: [], allowStateChanging: false },
+        createdAt: now,
+        updatedAt: now,
+      };
+      await workflowStore.createWorkflow(workflow);
+      const runStore = createWorkflowRunStore(createMemoryStorage());
+      const runRecord = await runStore.createRun({
+        id: toRunRecordId('run-1'),
+        workflowId: workflow.id,
+        values: {},
+      });
+      if (!runRecord.ok) {
+        throw new Error('expected a run record');
+      }
+
+      const result = await runWorkflowInBackground(
+        workflow,
+        runRecord.value,
+        runStore,
+        workflowStore,
+        deps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.value.status).toBe('completed');
+      expect(seenArgs).toEqual({ type: 'input_text', ref: 'ax:1', text: 'hunter2' });
+    });
+
+    it('hard-stops with a clear reason when a secret cannot be resolved because the vault is locked', async () => {
+      const cdp = createFakeCdp(1, { onSend: () => ok(undefined) });
+      await cdp.attach();
+      const registry = createDefaultToolRegistry();
+      const provider = createMockProvider({ responses: [navigatorResponse()] });
+      const navigate = createNavigatorService(routerFor(provider), registry);
+      const ctx: ExecutorContext = { session: cdp, tabManager: createFakeTabManager(1) };
+      const deps: BackgroundRunDeps = {
+        registry,
+        ctx,
+        session: cdp,
+        navigate,
+        vault: createSecretVault(createMemoryStorage()), // never unlocked
+      };
+      const workflowStore = createWorkflowStore(createMemoryStorage());
+      const now = 1_700_000_000_000;
+      const workflow: Workflow = {
+        id: toWorkflowId('login'),
+        version: 0,
+        name: 'Log in',
+        origin: 'https://shop.example.com',
+        params: [],
+        steps: [
+          {
+            stepId: toWorkflowStepId('step-1'),
+            toolId: 'browser.input_text',
+            args: {
+              type: 'input_text',
+              ref: 'ax:1',
+              text: toSecretPlaceholder('login_password'),
+            },
+          },
+        ],
+        authorization: { allowedToolIds: [], allowedOrigins: [], allowStateChanging: false },
+        createdAt: now,
+        updatedAt: now,
+      };
+      await workflowStore.createWorkflow(workflow);
+      const runStore = createWorkflowRunStore(createMemoryStorage());
+      const runRecord = await runStore.createRun({
+        id: toRunRecordId('run-1'),
+        workflowId: workflow.id,
+        values: {},
+      });
+      if (!runRecord.ok) {
+        throw new Error('expected a run record');
+      }
+
+      const result = await runWorkflowInBackground(
+        workflow,
+        runRecord.value,
+        runStore,
+        workflowStore,
+        deps,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.value.status).toBe('hard_stopped');
+      expect(result.ok && result.value.reason).toContain('secret');
+    });
   });
 });

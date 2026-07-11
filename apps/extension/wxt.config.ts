@@ -27,7 +27,7 @@ export default defineConfig({
   manifest: {
     name: 'Aegis',
     description: 'Local-first, bring-your-own-key browser-automation agent for Chrome & Edge.',
-    permissions: ['storage', 'sidePanel', 'tabs', 'debugger', 'alarms'],
+    permissions: ['storage', 'sidePanel', 'tabs', 'debugger', 'alarms', 'notifications'],
     host_permissions: ['<all_urls>'],
   },
 });

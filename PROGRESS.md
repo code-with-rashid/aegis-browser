@@ -116,7 +116,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 - [x] #115 P3-8 Background run engine — blocked by: #111
 - [x] #116 P3-9 Scheduler + triggers — blocked by: #115
-- [ ] #117 P3-10 Unattended-mode guardrails — blocked by: #116, #114
+- [x] #117 P3-10 Unattended-mode guardrails — blocked by: #116, #114
 
 ### M17 — Workflow UX, evals, release
 
@@ -514,6 +514,19 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   `apps/extension`'s new `Scheduler.checkSchedules`, which starts a background run
   (#115) for each due schedule; `Scheduler.triggerNow` is the manual-trigger entry point.
   `WorkflowRunStore` gains `listRunsForWorkflow` for per-workflow run history.
+- [0051](docs/adr/0051-unattended-mode-guardrails.md) — Unattended-mode guardrails (Phase
+  3, issue #117): new `gateOriginalStep`/`gateWorkflowOrigin` enforce a workflow's
+  `RunPolicy` against its _recorded_ steps before an unattended run executes them —
+  distinct from `gateHeal` (#114), since a recorded, `allowStateChanging`-authorized
+  state-changing step is allowed to replay unattended while a healed fix never is. New
+  `exceedsMaxSteps`/`hasReachedDailyRunLimit` enforce `maxStepsPerRun`/`maxRunsPerDay`
+  (present in the schema since #108, never enforced until now). New
+  `resolveStepArgsSecrets` resolves `‹secret:name›` placeholders in any step's args via
+  the vault before executing — discovered along the way that `@aegis/security`'s
+  pre-existing `resolveActionSecrets` was never actually called from any real execution
+  path anywhere in the codebase; an unresolvable secret hard-stops the run rather than
+  ever leaking the raw placeholder. `apps/extension` gains a real `chrome.notifications`
+  call on any hard-stop (new `"notifications"` permission).
 
 ## Notes
 
@@ -599,5 +612,11 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
 - #116 (scheduler + triggers) merged 2026-07-11 — see ADR 0050. `chrome.alarms`-based
   scheduling (`interval`/`daily`), a manual trigger, and per-workflow enable/disable are
   all in place; a scheduled workflow now fires via a 1-minute polling alarm and records a
-  run whose history is visible via the new `listRunsForWorkflow`. Next up, M17
-  (#117-#121) is unattended guardrails, workflow UX, evals, and the v0.3 release.
+  run whose history is visible via the new `listRunsForWorkflow`.
+- #117 (unattended-mode guardrails) merged 2026-07-11 — see ADR 0051. Final issue in M16;
+  a workflow's own `RunPolicy` now actually bounds its _recorded_ steps unattended (not
+  just healed ones, #114), `maxStepsPerRun`/`maxRunsPerDay` are enforced for the first
+  time since the schema defined them in #108, secrets resolve via the vault before a step
+  executes (or the run safely hard-stops rather than leaking a placeholder), and a
+  blocked run notifies the user via `chrome.notifications`. Next up, M17 (#118-#121) is
+  workflow UX, evals, and the v0.3 release.

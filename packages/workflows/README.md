@@ -341,3 +341,38 @@ already a `WorkflowRunRecord` (#115), this is just the per-workflow accessor.
 The actual `chrome.alarms` wiring, the manual-trigger entry point, and tying schedules to
 `BackgroundRunManager.startBackgroundRun` live in `apps/extension/background/scheduler.ts`
 — see `docs/adr/0050-scheduler-triggers.md`.
+
+## Unattended-mode guardrails (#117)
+
+`runWorkflowInBackground` now enforces `workflow.authorization` before ever running a
+step — "safe autonomy," not just "runs unattended":
+
+- **`gateWorkflowOrigin`/`exceedsMaxSteps`** (`background/run-policy-gate.ts`,
+  `background/run-rate-limit.ts`) check the workflow's own `origin` and step count once,
+  up front — a workflow whose origin or length isn't authorized never starts at all.
+- **`gateOriginalStep`** checks each _recorded_ step's tool id and classified risk (using
+  the step's own already-recorded `target.name` to elevate risk — no extra perception
+  pull needed) against `allowedToolIds`/`allowStateChanging`. This is deliberately
+  **not** `heal-gate.ts`'s `gateHeal`: a recorded, `allowStateChanging`-authorized
+  state-changing step is allowed to replay unattended (the user themselves recorded and
+  authorized it); a Navigator-_proposed_ fix never is (#114), regardless of that flag.
+- **`resolveStepArgsSecrets`** (`background/resolve-step-secrets.ts`) resolves every
+  `‹secret:name›` placeholder anywhere in a step's args (any tool's shape, not just a
+  browser `Action`'s two known fields) via the vault before it executes. An unresolvable
+  secret — vault locked, or the name doesn't exist — hard-stops the run; it's never
+  allowed to fall through to the literal placeholder text.
+- **`hasReachedDailyRunLimit`** (`background/run-rate-limit.ts`) is a pure function of
+  `RunPolicy.maxRunsPerDay` and a workflow's recent run start times (typically
+  `WorkflowRunStore.listRunsForWorkflow`) — `apps/extension`'s `BackgroundRunManager`
+  checks it before opening a tab for a new run.
+
+```ts
+import { exceedsMaxSteps, gateOriginalStep, gateWorkflowOrigin } from '@aegis/workflows';
+
+const originGate = gateWorkflowOrigin(workflow.origin, workflow.authorization);
+// { kind: 'allow' } | { kind: 'hard_stop', reason }
+```
+
+A run that hard-stops on any of the above is reported to the user via a real
+`chrome.notifications` call (`apps/extension/background/notify.ts`) — see
+`docs/adr/0051-unattended-mode-guardrails.md`.
