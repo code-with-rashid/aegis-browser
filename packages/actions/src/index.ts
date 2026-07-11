@@ -3,6 +3,8 @@ export * from './schema';
 export type { ActionRisk, ActionRiskContext } from './risk';
 export { STATE_CHANGING_KEYWORDS, classifyActionRisk, elevateRisk } from './risk';
 
+export { targetRefOf } from './target-ref';
+
 export type { ActionValidationErrorCode } from './validate-action';
 export { ActionValidationError, validateAction } from './validate-action';
 

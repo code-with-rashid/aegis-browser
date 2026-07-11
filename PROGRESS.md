@@ -99,7 +99,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M13 — Workflow model & recording
 
 - [x] #108 P3-1 Workflow data model + storage — blocked by: none
-- [ ] #109 P3-2 Run recorder — blocked by: #108
+- [x] #109 P3-2 Run recorder — blocked by: #108
 - [ ] #110 P3-3 Parameterization — blocked by: #109
 
 ### M14 — Deterministic execution
@@ -434,6 +434,13 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   but currently-empty migration mechanism (tested against synthetic fixtures, no invented
   domain migrations), and `WorkflowStore` (create/get/update/remove/list, one storage key
   holding a map keyed by id, mirroring `@aegis/mcp`'s `McpServerStore`).
+- [0043](docs/adr/0043-run-recorder.md) — Run recorder (Phase 3, issue #109):
+  `buildWorkflowSteps`/`createRunRecorder` capture a successful run's steps, mirroring
+  `buildTraceStep`'s by-index correlation of `lastRunSummary.toolCalls` with
+  `proposedToolCalls`. New `deriveSelector` (a real, previously-unused `DOM.describeNode`
+  CDP call) builds a best-effort resilient selector; `WorkflowTarget.selector` is revised
+  to optional since deriving one can genuinely fail. `targetRefOf` moved from a private
+  duplicate in `policy-service.ts` into `@aegis/actions`, used by both callers now.
 
 ## Notes
 
@@ -490,3 +497,6 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   per-issue loop as Phases 1 and 2.
 - #108 (workflow data model + storage) merged 2026-07-11 — see ADR 0042. First issue in
   M13; `@aegis/workflows` exists as a real package with zero consumers yet, as expected.
+- #109 (run recorder) merged 2026-07-11 — see ADR 0043. `@aegis/workflows` gains its
+  first cross-package dependencies (`agent`/`actions`/`perception`); still no consumer in
+  `apps/extension` yet — that's a later issue's UI wiring, not this one's scope.

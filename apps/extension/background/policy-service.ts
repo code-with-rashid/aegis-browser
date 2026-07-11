@@ -1,4 +1,5 @@
 import type { Action, ActionRisk, ToolRegistry } from '@aegis/actions';
+import { targetRefOf } from '@aegis/actions';
 import {
   AgentError,
   type PolicyCheckOutput,
@@ -31,28 +32,6 @@ function reasonFor(
   }
 }
 
-/** The ref a browser action targets, for the action types that have one — `undefined` for the rest. */
-function refOf(action: Action): string | undefined {
-  switch (action.type) {
-    case 'click':
-    case 'input_text':
-    case 'scroll':
-    case 'get_dropdown_options':
-    case 'select_dropdown_option':
-    case 'send_keys':
-      return action.ref;
-    case 'navigate':
-    case 'go_back':
-    case 'open_tab':
-    case 'switch_tab':
-    case 'close_tab':
-    case 'wait':
-    case 'extract':
-    case 'done':
-      return undefined;
-  }
-}
-
 /**
  * The accessible name of a browser tool call's target element, if it has one and
  * `perception` still has it listed — feeds `ActionRiskContext.elementName`, the signal
@@ -67,7 +46,7 @@ function elementNameFor(
   if (tool?.source !== 'browser' || perception === undefined) {
     return undefined;
   }
-  const ref = refOf(toolCall.args as Action);
+  const ref = targetRefOf(toolCall.args as Action);
   if (ref === undefined) {
     return undefined;
   }

@@ -2,11 +2,10 @@
 
 Phase 3: turns a one-off agent run into a reusable, deterministic, self-healing
 `Workflow` — record once, replay without the planner, heal when a step breaks, and run
-unattended only within a pre-authorized `RunPolicy`. Depends on `@aegis/shared` only for
-now (P3-1); later Phase 3 issues add the recorder (`@aegis/agent`), the deterministic
-executor (`@aegis/actions`/`@aegis/perception`), and self-heal — never the other
-direction, so `agent`/`actions`/`perception`/`security` stay unaware `@aegis/workflows`
-exists (`docs/adr/0042-workflow-data-model-storage.md`).
+unattended only within a pre-authorized `RunPolicy`. Depends on `@aegis/agent`/
+`@aegis/actions`/`@aegis/perception`/`@aegis/shared` — never the other direction, so
+those packages stay unaware `@aegis/workflows` exists
+(`docs/adr/0042-workflow-data-model-storage.md`).
 
 ## The data model (#108)
 
@@ -55,3 +54,42 @@ mechanism is real and tested (`src/migration/migrate.test.ts`), not a stub: the 
 `updateWorkflow` (patches `name`/`params`/`steps`/`authorization`, bumps `version` and
 `updatedAt`, fails if the workflow doesn't exist), `removeWorkflow` (a no-op, not an
 error, if already gone).
+
+## Recording a run (#109)
+
+`createRunRecorder(session: CdpSession)` accumulates `WorkflowStep`s across a whole agent
+run. A composition-root subscriber (in `apps/extension`, not here — UI/wiring stays in the
+app) calls `recorder.recordCycle(snapshot.context)` on the same "`verifying` exits"
+transition `apps/extension`'s trace already hooks (`docs/adr/0014-action-trace-log-ui.md`),
+then reads `recorder.steps` once the run reaches `done` to build a `Workflow` via
+`WorkflowStore.createWorkflow`:
+
+```ts
+import { createRunRecorder, createWorkflowStore, toWorkflowId } from '@aegis/workflows';
+
+const recorder = createRunRecorder(cdpSession);
+// on every `verifying`-exit transition:
+await recorder.recordCycle(snapshot.context);
+// once the run reaches `done`:
+await store.createWorkflow({
+  id: toWorkflowId('check-order-status'),
+  name: 'Check order status',
+  origin,
+  steps: recorder.steps,
+  authorization: { allowedToolIds: [], allowedOrigins: [], allowStateChanging: false },
+});
+```
+
+`buildWorkflowSteps` (what `recordCycle` calls internally) mirrors `@aegis/agent`'s own
+`buildTraceStep`: it correlates `lastRunSummary.toolCalls` (outcome, no args) with
+`proposedToolCalls` (the real args) _by index_ — the same alignment guarantee
+`trace.ts` relies on — and only records `succeeded` calls. For a targeted browser action
+it also captures the element's `ref`, accessible `role`/`name` (from the _same_
+pre-action perception the Navigator itself decided against), and a best-effort resilient
+`selector` via `deriveSelector` — a new `DOM.describeNode` CDP call (`#id` first, then
+`tag.class1.class2`, falling back to the bare tag) building on the same backend-node-id
+`@aegis/actions`' `resolveRef` already decodes from a ref. `selector` is optional on
+`WorkflowTarget` (revised from P3-1's original required field,
+`docs/adr/0043-run-recorder.md`) since deriving one can genuinely fail outright — a ref
+that doesn't encode a backend node id, or an element already detached by record time —
+leaving `role`/`name` as the only target information captured for that step.
