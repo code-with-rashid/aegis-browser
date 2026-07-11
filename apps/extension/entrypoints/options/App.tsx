@@ -5,14 +5,22 @@ import {
 } from '@aegis/mcp';
 import { createPolicyStore, createSecretVault } from '@aegis/security';
 import { createChromeStorageAdapter } from '@aegis/shared';
+import { createWorkflowRunStore, createWorkflowStore } from '@aegis/workflows';
 import { useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
+import { connectToBackgroundWorkflowBridge } from '../../messaging/chrome-port';
+import type {
+  BackgroundToOptionsWorkflowMessage,
+  OptionsToBackgroundWorkflowMessage,
+} from '../../messaging/workflow-protocol';
 import { McpToolsPanel } from './mcp-tools-panel';
 import { ModelsAndKeysPanel } from './models-and-keys-panel';
 import { PermissionsPanel } from './permissions-panel';
 import { SecretVaultPanel } from './secret-vault-panel';
+import { WorkflowLibraryPanel } from './workflow-library-panel';
+import { createWorkflowRunTrigger } from './workflow-run-trigger';
 
 const storage = createChromeStorageAdapter(chrome.storage.local);
 const policyStore = createPolicyStore(storage);
@@ -20,14 +28,23 @@ const secretVault = createSecretVault(storage);
 const mcpServerStore = createMcpServerStore(storage);
 const mcpToolPolicyStore = createMcpToolPolicyStore(storage);
 const webMcpSettingsStore = createWebMcpSettingsStore(storage);
+const workflowStore = createWorkflowStore(storage);
+const workflowRunStore = createWorkflowRunStore(storage);
+const workflowRunTrigger = createWorkflowRunTrigger(
+  connectToBackgroundWorkflowBridge<
+    OptionsToBackgroundWorkflowMessage,
+    BackgroundToOptionsWorkflowMessage
+  >(),
+);
 
-type Tab = 'models' | 'permissions' | 'tools' | 'secrets';
+type Tab = 'models' | 'permissions' | 'tools' | 'secrets' | 'workflows';
 
 const TABS: readonly { tab: Tab; label: string }[] = [
   { tab: 'models', label: 'Models & Keys' },
   { tab: 'permissions', label: 'Permissions' },
   { tab: 'tools', label: 'Tools & MCP' },
   { tab: 'secrets', label: 'Secrets' },
+  { tab: 'workflows', label: 'Workflows' },
 ];
 
 export default function App(): React.JSX.Element {
@@ -69,6 +86,13 @@ export default function App(): React.JSX.Element {
           />
         ) : null}
         {tab === 'secrets' ? <SecretVaultPanel vault={secretVault} /> : null}
+        {tab === 'workflows' ? (
+          <WorkflowLibraryPanel
+            workflowStore={workflowStore}
+            runStore={workflowRunStore}
+            runTrigger={workflowRunTrigger}
+          />
+        ) : null}
       </div>
     </div>
   );

@@ -1,16 +1,25 @@
 import { createChromeStorageAdapter, createLogger } from '@aegis/shared';
+import { toWorkflowId } from '@aegis/workflows';
 import { defineBackground } from 'wxt/utils/define-background';
 
 import { createBackgroundRunManager } from '../background/background-run-manager';
 import { createRunManager } from '../background/run-manager';
 import { createScheduler } from '../background/scheduler';
 import { createWebMcpTabBridge } from '../background/webmcp-tab-bridge';
-import { listenForPanelConnections, listenForWebMcpTabConnections } from '../messaging/chrome-port';
+import {
+  listenForPanelConnections,
+  listenForWebMcpTabConnections,
+  listenForWorkflowBridgeConnections,
+} from '../messaging/chrome-port';
 import type { BackgroundToPanelMessage, PanelToBackgroundMessage } from '../messaging/protocol';
 import type {
   BackgroundToContentWebMcpMessage,
   ContentToBackgroundWebMcpMessage,
 } from '../messaging/webmcp-protocol';
+import type {
+  BackgroundToOptionsWorkflowMessage,
+  OptionsToBackgroundWorkflowMessage,
+} from '../messaging/workflow-protocol';
 
 const logger = createLogger('background');
 
@@ -71,5 +80,33 @@ export default defineBackground(() => {
     if (alarm.name === SCHEDULE_CHECK_ALARM_NAME) {
       void scheduler.checkSchedules(Date.now());
     }
+  });
+
+  listenForWorkflowBridgeConnections<
+    BackgroundToOptionsWorkflowMessage,
+    OptionsToBackgroundWorkflowMessage
+  >((port) => {
+    port.onMessage((message) => {
+      scheduler
+        .triggerNow(toWorkflowId(message.workflowId), message.values)
+        .then((result) => {
+          port.send(
+            result.ok
+              ? {
+                  type: 'WORKFLOW_RUN_STARTED',
+                  requestId: message.requestId,
+                  runId: result.value.id,
+                }
+              : {
+                  type: 'WORKFLOW_RUN_START_FAILED',
+                  requestId: message.requestId,
+                  reason: result.error.message,
+                },
+          );
+        })
+        .catch((error: unknown) => {
+          logger.error('Failed to trigger a workflow run', { error });
+        });
+    });
   });
 });
