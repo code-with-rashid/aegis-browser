@@ -110,7 +110,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M15 — Self-healing
 
 - [x] #113 P3-6 Failure detection + self-heal — blocked by: #112
-- [ ] #114 P3-7 Healing safety & review — blocked by: #113
+- [x] #114 P3-7 Healing safety & review — blocked by: #113
 
 ### M16 — Scheduling & background runs
 
@@ -480,6 +480,18 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   `version`) before continuing the remaining steps. Gives up — original `failed` outcome,
   workflow untouched — the moment one heal attempt doesn't succeed. Deliberately no risk/
   confirmation gate in front of executing the fix yet — that's #114's job.
+- [0048](docs/adr/0048-healing-safety-review.md) — Healing safety & review (Phase 3, issue
+  #114): `healStep` now classifies a proposed fix's risk (`ToolRegistry.classify`, the
+  same `elementNameFor`-style signal `apps/extension`'s live policy service already uses)
+  and gates it via new `gateHeal` _before_ ever calling the tool. A state-changing fix
+  needs confirmation when attended, hard-stops when unattended; a fix outside the
+  workflow's `RunPolicy.allowedToolIds` hard-stops unattended regardless of risk.
+  `RunPolicy.allowStateChanging` never overrides this — it pre-authorizes the step as
+  _recorded_, not an LLM-improvised fix. New `HealOutcome` kinds `needs_confirmation`
+  (carries a `HealDiff` + `PendingHeal`, resumed via `applyConfirmedHeal`) and
+  `hard_stopped`; `runWorkflowWithHealing`'s outcome widens to `HealingRunOutcome` without
+  touching #111's own `WorkflowRunOutcome`. New `rollbackHealedStep` reverts one step back
+  to a prior snapshot via the existing `WorkflowStore.updateWorkflow`.
 
 ## Notes
 
@@ -552,3 +564,7 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   M15; `runWorkflowWithHealing` can now recover a step whose target shifted by asking the
   live agent loop's own Navigator for a fix, tested end to end with a `MockProvider` and a
   mutated selector fixture. No safety gate on the fix yet — that's #114.
+- #114 (healing safety & review) merged 2026-07-11 — see ADR 0048. Final issue in M15; a
+  state-changing heal now needs confirmation (attended) or hard-stops (unattended) before
+  it ever executes, with a diff and a rollback primitive. Next up, M16 (#115/#116/#117) is
+  scheduling and background runs.
