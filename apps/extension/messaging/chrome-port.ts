@@ -1,6 +1,7 @@
 import type { MessagePort } from './port';
 import { RUN_BRIDGE_PORT_NAME } from './protocol';
 import { WEBMCP_TAB_PORT_NAME } from './webmcp-protocol';
+import { WORKFLOW_BRIDGE_PORT_NAME } from './workflow-protocol';
 
 function wrapChromePort<TSend, TReceive>(port: chrome.runtime.Port): MessagePort<TSend, TReceive> {
   return {
@@ -39,6 +40,27 @@ export function listenForPanelConnections<TSend, TReceive>(
 ): () => void {
   const listener = (port: chrome.runtime.Port): void => {
     if (port.name !== RUN_BRIDGE_PORT_NAME) {
+      return;
+    }
+    onConnection(wrapChromePort(port));
+  };
+  chrome.runtime.onConnect.addListener(listener);
+  return () => {
+    chrome.runtime.onConnect.removeListener(listener);
+  };
+}
+
+/** The options page's end of the workflow bridge — call once when the panel mounts. */
+export function connectToBackgroundWorkflowBridge<TSend, TReceive>(): MessagePort<TSend, TReceive> {
+  return wrapChromePort(chrome.runtime.connect({ name: WORKFLOW_BRIDGE_PORT_NAME }));
+}
+
+/** The background's end — call once at startup; invokes `onConnection` for each options page that connects. */
+export function listenForWorkflowBridgeConnections<TSend, TReceive>(
+  onConnection: (port: MessagePort<TSend, TReceive>) => void,
+): () => void {
+  const listener = (port: chrome.runtime.Port): void => {
+    if (port.name !== WORKFLOW_BRIDGE_PORT_NAME) {
       return;
     }
     onConnection(wrapChromePort(port));

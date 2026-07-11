@@ -120,7 +120,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M17 — Workflow UX, evals, release
 
-- [ ] #118 P3-11 Workflow library UI — blocked by: #112
+- [x] #118 P3-11 Workflow library UI — blocked by: #112
 - [ ] #119 P3-12 Workflow builder/editor — blocked by: #118, #117
 - [ ] #120 P3-13 Workflow evals + security suite — blocked by: #119
 - [ ] #121 P3-14 Docs + v0.3 — blocked by: #120
@@ -527,6 +527,15 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   path anywhere in the codebase; an unresolvable secret hard-stops the run rather than
   ever leaking the raw placeholder. `apps/extension` gains a real `chrome.notifications`
   call on any hard-stop (new `"notifications"` permission).
+- [0052](docs/adr/0052-workflow-library-ui.md) — Workflow library UI (Phase 3, issue #118):
+  new options-page "Workflows" tab lists saved workflows, letting a user run one with its
+  own parameter values, view its run history (via a new sibling `WorkflowRunTrace`, since
+  a deterministic replay's `WorkflowStepResult` shares no shape with the side panel's
+  `TraceList`), edit its name/param defaults, and delete it. Starting a run is the first
+  thing the options page has ever needed the background service worker for, so it gets its
+  own `requestId`-correlated message-port channel (`WORKFLOW_BRIDGE_PORT_NAME`), separate
+  from the side panel's; the background side just forwards to `scheduler.triggerNow`
+  (#116). Editing recorded `steps` themselves is out of scope — that's #119's job.
 
 ## Notes
 
@@ -620,3 +629,10 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   executes (or the run safely hard-stops rather than leaking a placeholder), and a
   blocked run notifies the user via `chrome.notifications`. Next up, M17 (#118-#121) is
   workflow UX, evals, and the v0.3 release.
+- #118 (workflow library UI) merged 2026-07-11 — see ADR 0052. First issue in M17; the
+  options page's new "Workflows" tab is the first UI over any of `@aegis/workflows`'
+  stores — list, run-on-demand with per-run param values, run history with a full
+  step-by-step trace, edit name/param defaults, and delete. Also the first time the
+  options page has ever needed to reach the background service worker (a new, separate
+  message-port channel just for triggering a run). Next up, #119 (workflow builder/editor)
+  is the recorded-`steps` editor this issue deliberately left out of scope.
