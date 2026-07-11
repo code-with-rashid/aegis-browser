@@ -81,7 +81,7 @@ export function createWorkflowHealResponder(): FakeModelResponder {
 
 /**
  * The worst-case self-heal scenario (#120): {@link WORKFLOW_HEAL_INJECTED_FIXTURE}
- * contains a hidden `SYSTEM: ...` line baiting a click on a "Delete Account" button — the
+ * contains a visible `SYSTEM: ...` line baiting a click on a "Delete Account" button — the
  * Navigator here is deliberately scripted to *fall for it*, mirroring
  * `injected-purchase-attempt.ts`'s worst-case principle: not "does sanitization catch this
  * phrasing" but "if a model gets fooled anyway during an unattended heal, does the system's
