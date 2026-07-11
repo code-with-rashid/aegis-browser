@@ -301,3 +301,43 @@ Driving a real managed tab, reattaching to it on a service-worker restart, and e
 the concurrency limit is composition-root work — see `apps/extension/background/
 managed-tab.ts` and `background-run-manager.ts`, and
 `docs/adr/0049-background-run-engine.md`.
+
+## Scheduler + triggers (#116)
+
+`WorkflowScheduleStore` (`schedule/workflow-schedule-store.ts`) persists at most one
+`WorkflowSchedule` per workflow (keyed by `workflowId`, so `upsertSchedule` creates or
+replaces rather than erroring on an existing one): `enabled`, a `ScheduleTrigger`
+(`{ kind: 'interval', everyMinutes }` or `{ kind: 'daily', hour, minute }` — deliberately
+not a full cron grammar, since `chrome.alarms` itself only fires on a period or a specific
+time), the run's `values`, and `lastRunAt`.
+
+`isScheduleDue(schedule, now)` / `findDueSchedules(schedules, now)`
+(`schedule/due-schedules.ts`) are pure functions of the schedule and the clock — testable
+with fixed timestamps, no real alarm needs to fire to verify them. A `daily` trigger never
+fires for a "missed" occurrence from before the schedule existed: it's not due until
+_today's_ `hour:minute` has actually arrived.
+
+```ts
+import { createWorkflowScheduleStore, findDueSchedules } from '@aegis/workflows';
+
+const scheduleStore = createWorkflowScheduleStore(storage);
+await scheduleStore.upsertSchedule({
+  workflowId: workflow.id,
+  enabled: true,
+  trigger: { kind: 'daily', hour: 9, minute: 0 },
+});
+
+// from a recurring chrome.alarms handler:
+const schedules = await scheduleStore.listSchedules();
+for (const due of findDueSchedules(schedules.ok ? schedules.value : [], Date.now())) {
+  // start a background run for `due.workflowId` (apps/extension's Scheduler, #116)
+}
+```
+
+`WorkflowRunStore` gains `listRunsForWorkflow(workflowId)` (newest first) — the "run
+history with status/outputs" scope item; every scheduled or manually-triggered run was
+already a `WorkflowRunRecord` (#115), this is just the per-workflow accessor.
+
+The actual `chrome.alarms` wiring, the manual-trigger entry point, and tying schedules to
+`BackgroundRunManager.startBackgroundRun` live in `apps/extension/background/scheduler.ts`
+— see `docs/adr/0050-scheduler-triggers.md`.

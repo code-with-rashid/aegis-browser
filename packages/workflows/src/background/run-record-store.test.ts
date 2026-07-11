@@ -100,4 +100,28 @@ describe('createWorkflowRunStore', () => {
       expect(result.ok && result.value.map((record) => record.id)).toEqual(['run-1']);
     });
   });
+
+  describe('listRunsForWorkflow', () => {
+    function delay(ms: number): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    it('lists only runs for the given workflow, newest first', async () => {
+      const store = createWorkflowRunStore(createMemoryStorage());
+      await store.createRun(
+        newRunInput({ id: toRunRecordId('run-1'), workflowId: toWorkflowId('wf-1') }),
+      );
+      await store.createRun(
+        newRunInput({ id: toRunRecordId('run-2'), workflowId: toWorkflowId('wf-2') }),
+      );
+      await delay(5);
+      await store.createRun(
+        newRunInput({ id: toRunRecordId('run-3'), workflowId: toWorkflowId('wf-1') }),
+      );
+
+      const result = await store.listRunsForWorkflow(toWorkflowId('wf-1'));
+
+      expect(result.ok && result.value.map((record) => record.id)).toEqual(['run-3', 'run-1']);
+    });
+  });
 });

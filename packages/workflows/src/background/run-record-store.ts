@@ -34,6 +34,10 @@ export interface WorkflowRunStore {
   listRuns(): Promise<Result<readonly WorkflowRunRecord[], WorkflowError>>;
   /** Every record still `status: 'running'` — what a restarted service worker must resume (#115). */
   listRunningRuns(): Promise<Result<readonly WorkflowRunRecord[], WorkflowError>>;
+  /** One workflow's run history (#116), newest first — what a workflow library UI's "history" view reads. */
+  listRunsForWorkflow(
+    workflowId: WorkflowId,
+  ): Promise<Result<readonly WorkflowRunRecord[], WorkflowError>>;
 }
 
 const RUNS_KEY = 'workflow-runs';
@@ -131,6 +135,18 @@ export function createWorkflowRunStore(storage: StoragePort): WorkflowRunStore {
         return mapResult;
       }
       return ok(Object.values(mapResult.value).filter((record) => record.status === 'running'));
+    },
+
+    async listRunsForWorkflow(workflowId) {
+      const mapResult = await readMap(storage);
+      if (!mapResult.ok) {
+        return mapResult;
+      }
+      return ok(
+        Object.values(mapResult.value)
+          .filter((record) => record.workflowId === workflowId)
+          .sort((a, b) => b.startedAt - a.startedAt),
+      );
     },
   };
 }
