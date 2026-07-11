@@ -121,7 +121,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M17 — Workflow UX, evals, release
 
 - [x] #118 P3-11 Workflow library UI — blocked by: #112
-- [ ] #119 P3-12 Workflow builder/editor — blocked by: #118, #117
+- [x] #119 P3-12 Workflow builder/editor — blocked by: #118, #117
 - [ ] #120 P3-13 Workflow evals + security suite — blocked by: #119
 - [ ] #121 P3-14 Docs + v0.3 — blocked by: #120
 
@@ -536,6 +536,15 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   own `requestId`-correlated message-port channel (`WORKFLOW_BRIDGE_PORT_NAME`), separate
   from the side panel's; the background side just forwards to `scheduler.triggerNow`
   (#116). Editing recorded `steps` themselves is out of scope — that's #119's job.
+- [0053](docs/adr/0053-workflow-builder-editor.md) — Workflow builder/editor (Phase 3,
+  issue #119): new `WorkflowBuilderPanel` supersedes #118's inline "name + param defaults
+  only" editor — a full-page swap letting a user view/reorder/delete recorded steps
+  (content stays read-only), add/remove/edit params of either kind, edit the `RunPolicy`,
+  and enable/configure scheduling. Every capability already existed in `@aegis/workflows`
+  (`WorkflowStore.updateWorkflow`'s `WorkflowPatch`, `WorkflowScheduleStore.upsertSchedule`)
+  — this issue is UI-only, no domain-package changes. "Version history" shows `version`/
+  `updatedAt`, the level the data model actually supports; a real snapshot timeline is
+  future work.
 
 ## Notes
 
@@ -636,3 +645,9 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   options page has ever needed to reach the background service worker (a new, separate
   message-port channel just for triggering a run). Next up, #119 (workflow builder/editor)
   is the recorded-`steps` editor this issue deliberately left out of scope.
+- #119 (workflow builder/editor) merged 2026-07-11 — see ADR 0053. New `WorkflowBuilderPanel`
+  supersedes #118's stopgap inline editor: view/reorder/delete steps, full param add/
+  remove/edit (either kind), an editable `RunPolicy` form, and a schedule form wired to
+  `WorkflowScheduleStore`. Confirmed every capability needed already existed in
+  `@aegis/workflows` since #108-#116 — purely a UI issue, no domain-package changes. Next
+  up, #120 (workflow evals + security suite) is the last issue before docs + the v0.3 tag.
