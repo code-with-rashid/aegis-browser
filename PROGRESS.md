@@ -114,7 +114,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 
 ### M16 — Scheduling & background runs
 
-- [ ] #115 P3-8 Background run engine — blocked by: #111
+- [x] #115 P3-8 Background run engine — blocked by: #111
 - [ ] #116 P3-9 Scheduler + triggers — blocked by: #115
 - [ ] #117 P3-10 Unattended-mode guardrails — blocked by: #116, #114
 
@@ -492,6 +492,18 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   `hard_stopped`; `runWorkflowWithHealing`'s outcome widens to `HealingRunOutcome` without
   touching #111's own `WorkflowRunOutcome`. New `rollbackHealedStep` reverts one step back
   to a prior snapshot via the existing `WorkflowStore.updateWorkflow`.
+- [0049](docs/adr/0049-background-run-engine.md) — Background run engine (Phase 3, issue
+  #115): a managed tab is a real, non-active `chrome.tabs` tab (`background/managed-tab.ts`),
+  not `chrome.offscreen` — an offscreen document can't navigate to a third-party origin or
+  be `chrome.debugger`-attached. New `runWorkflowInBackground` drives steps one at a time,
+  persisting a `WorkflowRunRecord` (new `WorkflowRunStore`) after every step so a
+  service-worker eviction loses at most the one step in flight; a resumed call picks up
+  from `nextStepIndex`. Always heals `mode: 'unattended'`. New
+  `createBackgroundRunManager` (`apps/extension`) reuses `buildLoopServices` completely
+  unchanged — its `services.decide` already is the real `NavigatorService` the background
+  engine needs. Concurrency capped by a plain in-memory `RunConcurrencyLimiter`, not
+  persisted. No new messaging protocol — `startBackgroundRun` is a plain function; #116
+  (scheduler) is what will actually call it.
 
 ## Notes
 
@@ -568,3 +580,9 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   state-changing heal now needs confirmation (attended) or hard-stops (unattended) before
   it ever executes, with a diff and a rollback primitive. Next up, M16 (#115/#116/#117) is
   scheduling and background runs.
+- #115 (background run engine) merged 2026-07-11 — see ADR 0049. First issue in M16; a
+  workflow can now run to completion on a managed (non-active) tab with no side panel
+  open, checkpointing progress per step so it survives a simulated service-worker
+  restart — tested by resuming a fresh `WorkflowRunStore`/`BackgroundRunManager` instance
+  over the same storage after an interruption. `apps/extension` now depends on
+  `@aegis/workflows` for the first time.

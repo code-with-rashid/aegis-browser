@@ -258,3 +258,46 @@ gated outcomes (`HardStoppedRunOutcome`/`NeedsConfirmationRunOutcome`) without t
 them. `rollbackHealedStep(store, workflowId, stepId, previousStep)` reverts one step back
 to a prior snapshot — typically a rejected heal's `HealDiff.before` — via the same
 `WorkflowStore.updateWorkflow` (`docs/adr/0048-healing-safety-review.md`).
+
+## Background run engine (#115)
+
+Everything above assumes a caller `await`s the whole run in one call. Running unattended
+— no side panel open, not on the user's active tab, inside a Manifest V3 service worker
+Chrome can evict and restart at any time — needs two more pieces, both in
+`background/`:
+
+- **`WorkflowRunStore`** (`background/run-record-store.ts`) — persisted `WorkflowRunRecord`s
+  (`status`, `values`, `nextStepIndex`, `stepResults`, `tabId`, a `reason` for a
+  `failed`/`hard_stopped` run), mirroring `WorkflowStore`'s map-of-everything-under-one-key
+  shape. `listRunningRuns()` is what a restarted service worker resumes.
+- **`runWorkflowInBackground(workflow, runRecord, runStore, workflowStore, deps, signal?)`**
+  drives `executeWorkflow`/`healStep` **one step at a time** (unlike
+  `runWorkflowWithHealing`'s all-at-once loop), persisting `nextStepIndex`/`stepResults`
+  after every step. A call given a `runRecord` reloaded after an interruption resumes from
+  exactly `nextStepIndex` — nothing already recorded re-runs, nothing not yet recorded is
+  skipped. Always heals with `mode: 'unattended'` (#114): a state-changing fix hard-stops,
+  never pauses for a confirmation no one is there to give.
+- **`createRunConcurrencyLimiter(maxConcurrent)`** (`background/run-concurrency.ts`) — a
+  plain in-memory `tryAcquire()`/`release()` counter capping how many background runs
+  proceed at once; not persisted, since a restarted worker has nothing genuinely still
+  running in memory regardless of what any record says.
+
+```ts
+import { createWorkflowRunStore, runWorkflowInBackground } from '@aegis/workflows';
+
+const runStore = createWorkflowRunStore(storage);
+const runRecord = await runStore.createRun({ id, workflowId: workflow.id, values });
+if (runRecord.ok) {
+  await runWorkflowInBackground(workflow, runRecord.value, runStore, workflowStore, {
+    registry: toolRegistry,
+    ctx: executorContext,
+    session: cdpSession,
+    navigate: navigatorService,
+  });
+}
+```
+
+Driving a real managed tab, reattaching to it on a service-worker restart, and enforcing
+the concurrency limit is composition-root work — see `apps/extension/background/
+managed-tab.ts` and `background-run-manager.ts`, and
+`docs/adr/0049-background-run-engine.md`.

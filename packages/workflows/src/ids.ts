@@ -24,3 +24,15 @@ export type WorkflowStepId = Brand<string, 'WorkflowStepId'>;
 export function toWorkflowStepId(value: string): WorkflowStepId {
   return value as WorkflowStepId;
 }
+
+/**
+ * Identifies one background run of a workflow (#115) — stable across a service-worker
+ * eviction/restart, so a resumed run updates the same persisted record rather than
+ * starting a fresh one.
+ */
+export type RunRecordId = Brand<string, 'RunRecordId'>;
+
+/** Brands a raw string as a {@link RunRecordId}. Callers are responsible for uniqueness. */
+export function toRunRecordId(value: string): RunRecordId {
+  return value as RunRecordId;
+}
