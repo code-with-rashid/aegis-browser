@@ -115,7 +115,7 @@ Repo: https://github.com/code-with-rashid/aegis-browser
 ### M16 — Scheduling & background runs
 
 - [x] #115 P3-8 Background run engine — blocked by: #111
-- [ ] #116 P3-9 Scheduler + triggers — blocked by: #115
+- [x] #116 P3-9 Scheduler + triggers — blocked by: #115
 - [ ] #117 P3-10 Unattended-mode guardrails — blocked by: #116, #114
 
 ### M17 — Workflow UX, evals, release
@@ -504,6 +504,16 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   engine needs. Concurrency capped by a plain in-memory `RunConcurrencyLimiter`, not
   persisted. No new messaging protocol — `startBackgroundRun` is a plain function; #116
   (scheduler) is what will actually call it.
+- [0050](docs/adr/0050-scheduler-triggers.md) — Scheduler + triggers (Phase 3, issue #116):
+  new `WorkflowScheduleStore` persists at most one `WorkflowSchedule` per workflow
+  (`interval` or `daily` trigger — deliberately not a cron grammar, since `chrome.alarms`
+  itself only fires on a period or a specific time). New `isScheduleDue`/
+  `findDueSchedules` are pure functions of the schedule and the clock; a `daily` trigger
+  never fires for a "missed" occurrence from before the schedule existed. One recurring
+  `chrome.alarms` alarm (1-minute period, new `"alarms"` permission) drives
+  `apps/extension`'s new `Scheduler.checkSchedules`, which starts a background run
+  (#115) for each due schedule; `Scheduler.triggerNow` is the manual-trigger entry point.
+  `WorkflowRunStore` gains `listRunsForWorkflow` for per-workflow run history.
 
 ## Notes
 
@@ -586,3 +596,8 @@ README.md` backfills the sections #90-#92 were each missing; `CHANGELOG.md` gain
   restart — tested by resuming a fresh `WorkflowRunStore`/`BackgroundRunManager` instance
   over the same storage after an interruption. `apps/extension` now depends on
   `@aegis/workflows` for the first time.
+- #116 (scheduler + triggers) merged 2026-07-11 — see ADR 0050. `chrome.alarms`-based
+  scheduling (`interval`/`daily`), a manual trigger, and per-workflow enable/disable are
+  all in place; a scheduled workflow now fires via a 1-minute polling alarm and records a
+  run whose history is visible via the new `listRunsForWorkflow`. Next up, M17
+  (#117-#121) is unattended guardrails, workflow UX, evals, and the v0.3 release.

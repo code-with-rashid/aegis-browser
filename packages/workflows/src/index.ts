@@ -95,3 +95,13 @@ export type { RunConcurrencyLimiter } from './background/run-concurrency';
 export { createRunConcurrencyLimiter } from './background/run-concurrency';
 export type { BackgroundRunDeps } from './background/run-workflow-in-background';
 export { runWorkflowInBackground } from './background/run-workflow-in-background';
+
+export type { ScheduleTrigger, WorkflowSchedule } from './schedule/workflow-schedule';
+export { ScheduleTriggerSchema, WorkflowScheduleSchema } from './schedule/workflow-schedule';
+export type {
+  SchedulePatch,
+  UpsertScheduleInput,
+  WorkflowScheduleStore,
+} from './schedule/workflow-schedule-store';
+export { createWorkflowScheduleStore } from './schedule/workflow-schedule-store';
+export { findDueSchedules, isScheduleDue } from './schedule/due-schedules';
